@@ -51,6 +51,7 @@ pip install -r requirements.txt
 
 3. 运行服务器：
 ```bash
+cd backend
 uvicorn app.main:app --reload
 ```
 

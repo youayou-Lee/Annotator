@@ -1,5 +1,7 @@
 frontend/node_modules/
 .idea
 data/raw/upload/
-
+backend/app/api/__pycache__
 exampleData/
+backend/app/services/__pycache__
+backend\data\raw
