@@ -332,6 +332,7 @@ async def get_task_documents(
     task_id: str,
     task_service: TaskService = Depends(get_task_service)
 ):
+    print("获取任务文档列表")  # 添加日志
     try:
         documents = task_service.load_task_documents(task_id)
         return {

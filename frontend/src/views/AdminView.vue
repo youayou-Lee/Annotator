@@ -357,7 +357,7 @@ const createTaskForm = ref({
   name: '',
   description: '',
   data_file: null,
-  template: 'default.json'
+  template: 'template_default.json'
 })
 
 // 方法
