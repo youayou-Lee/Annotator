@@ -1,7 +1,11 @@
 frontend/node_modules/
 .idea
 backend/app/api/__pycache__
-exampleData/
 backend/app/services/__pycache__
-backend\data\raw\*
+
+
+backend\data\raw\upload
 backend\data\raw\oringinal_data
+exampleData/
+
+backend\data\raw\example.json
