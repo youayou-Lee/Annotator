@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import Column, Integer, String, JSON, DateTime, ForeignKey, Boolean, Enum
 from sqlalchemy.orm import relationship
 from app.database import Base
-import enum
+import enum, os, json
 
 class LegalBasis(BaseModel):
     """法定刑裁判依据"""
@@ -65,61 +65,71 @@ class TaskType(str, enum.Enum):
     COMPARISON = "comparison"
     TRAINING = "training"
 
-class Task(Base):
-    __tablename__ = "tasks"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
-    description = Column(String)
-    type = Column(Enum(TaskType))
-    template = Column(JSON)  # 标注模板
-    status = Column(Enum(TaskStatus), default=TaskStatus.PENDING)
-    priority = Column(Integer, default=0)
-    created_by = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # 任务配置
-    config = Column(JSON)  # 任务配置，包括过滤条件、标注字段等
-    editable_fields = Column(JSON)  # 可编辑字段列表
-    validation_rules = Column(JSON)  # 验证规则
-    
-    # 关联
-    documents = relationship("Document", back_populates="task")
-    creator = relationship("User", back_populates="tasks")
-    
-    # 统计信息
-    total_documents = Column(Integer, default=0)
-    annotated_documents = Column(Integer, default=0)
-    ai_reviewed_documents = Column(Integer, default=0)
-    training_ready_documents = Column(Integer, default=0)
-
-class TaskDocument(Base):
-    __tablename__ = "task_documents"
-
-    id = Column(Integer, primary_key=True, index=True)
-    task_id = Column(Integer, ForeignKey("tasks.id"))
-    document_id = Column(Integer, ForeignKey("documents.id"))
-    status = Column(String)  # pending, in_progress, completed
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    # 关联
-    task = relationship("Task", back_populates="documents")
-    document = relationship("Document")
 
 class Task(BaseModel):
     """标注任务模型"""
     id: str = Field(..., description="任务唯一标识")
     name: str = Field(..., description="任务名称")
     description: str = Field(..., description="任务描述")
+    files_path: List[str] = Field(..., description="文件存储路径")
     document_ids: List[str] = Field(default_factory=list, description="关联的文书ID列表")
     status: str = Field(default="pending", description="任务状态")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
-    config: Dict[str, Any] = Field(default_factory=dict, description="任务配置")
+    config: List[Dict[str, Any]] = Field(default_factory=list, description="任务配置，包含字段路径和类型")  # 修改为支持字典格式
     annotations: Dict[str, Any] = Field(default_factory=dict, description="标注结果")
-    documents: List[Document] = Field(default_factory=list, description="任务关联的文书列表")
+    documents: List['Document'] = Field(default_factory=list, description="任务关联的文书List")
+
+    def set_all_documents(self) -> List['Document']:
+        """初始化所有文书信息"""
+        self.documents = []
+        for file_path in self.files_path:
+            file_path = os.path.join("data", "raw", "upload", file_path)  # 拼接文件路径
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    for item in data:
+                        document = Document(**item)
+                        self.documents.append(document)
+            except Exception as e:
+                print(f"Error reading file {file_path}: {e}")
+        return self.documents
+
+    def __init__(self,**data):
+        super().__init__(**data)
+        # 初始化后自动调用set_all_documents
+        if self.files_path:  # 如果有文件路径才初始化
+            self.set_all_documents()
     
-    class Config:
-        arbitrary_types_allowed = True 
+
+class FieldConfig(BaseModel):
+    """字段配置模型"""
+    name: str = Field(..., description="字段名称")
+    type: str = Field(..., description="字段类型", pattern="^(string|boolean|number|array)$")
+    path: str = Field(..., description="字段在文档中的路径")
+    description: str = Field(default="", description="字段描述")
+
+class TaskConfig(BaseModel):
+    """任务配置模型"""
+    fields: List[FieldConfig] = Field(..., description="待标注的字段配置")
+
+    def get_beMarked(self) -> List[Dict[str, Any]]:
+        """获取待标注的字段配置列表"""
+        return [{"path": field.path, "type": field.type} for field in self.fields]
+
+    @classmethod
+    def from_template(cls, template_path: str, selected_fields: List[Dict[str, Any]]) -> 'TaskConfig':
+        """从模板文件创建配置"""
+        with open(template_path, 'r', encoding='utf-8') as f:
+            template = json.load(f)
+            
+        field_configs = []
+        for field in selected_fields:
+            field_configs.append(FieldConfig(
+                name=field["path"].split(".")[-1],
+                type=field["type"],
+                path=field["path"]
+            ))
+            
+        return cls(fields=field_configs)

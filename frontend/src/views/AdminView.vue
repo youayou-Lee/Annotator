@@ -108,29 +108,7 @@
         
         <!-- 格式化存储 -->
         <div v-if="activeMenu === 'format'" class="format-section">
-          <el-card>
-            <template #header>
-              <div class="card-header">
-                <span>格式化存储</span>
-              </div>
-            </template>
-            <el-form :model="formatForm" label-width="120px">
-              <el-form-item label="模板">
-                <el-input
-                  v-model="formatForm.template"
-                  type="textarea"
-                  :rows="5"
-                  placeholder="请输入JSON模板"
-                />
-              </el-form-item>
-              <el-form-item label="文件名">
-                <el-input v-model="formatForm.filename" placeholder="请输入文件名" />
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="handleFormat">开始格式化</el-button>
-              </el-form-item>
-            </el-form>
-          </el-card>
+          <FormatUploader />
         </div>
         
         <!-- 任务管理 -->
@@ -158,6 +136,12 @@
                     size="small"
                     @click="handleEditTask(scope.row)"
                   >编辑</el-button>
+                  <el-button
+                    size="small"
+                    type="warning"
+                    @click="handleMergeAnnotations(scope.row)"
+                    :disabled="scope.row.status !== 'pending'"
+                  >合并标注</el-button>
                   <el-button
                     size="small"
                     type="danger"
@@ -257,6 +241,46 @@
             placeholder="请输入任务描述"
           />
         </el-form-item>
+        <el-form-item label="可标注字段" required>
+          <el-table :data="createTaskForm.config" style="width: 100%">
+            <el-table-column label="字段路径">
+              <template #default="{ row }">
+                <el-select
+                  v-model="row.path"
+                  filterable
+                  allow-create
+                  default-first-option
+                  placeholder="请选择或输入字段路径"
+                >
+                  <el-option
+                    v-for="field in defaultAnnotationFields"
+                    :key="field"
+                    :label="field"
+                    :value="field"
+                  />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="字段类型" width="150">
+              <template #default="{ row }">
+                <el-select v-model="row.type" placeholder="请选择字段类型">
+                  <el-option label="文本" value="string" />
+                  <el-option label="数字" value="number" />
+                  <el-option label="布尔值" value="boolean" />
+                  <el-option label="数组" value="array" />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="100">
+              <template #default="{ $index }">
+                <el-button type="danger" size="small" @click="removeField($index)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div style="margin-top: 10px;">
+            <el-button type="primary" @click="addField">添加字段</el-button>
+          </div>
+        </el-form-item>
         <el-form-item label="数据文件" required>
           <el-upload
             class="upload-demo"
@@ -317,6 +341,7 @@ import {
   Monitor,
   Connection
 } from '@element-plus/icons-vue'
+import FormatUploader from '../components/FormatUploader.vue'
 
 const router = useRouter()
 
@@ -325,6 +350,7 @@ const activeMenu = ref('filter')
 const tasks = ref([])
 const availableFiles = ref([])
 const availableTemplates = ref([])
+const defaultAnnotationFields = ref(['是否缓刑', '罚金', '法定刑区间', '与宣告刑是否一致'])
 
 // 表单数据
 const filterForm = ref({
@@ -357,7 +383,8 @@ const createTaskForm = ref({
   name: '',
   description: '',
   data_file: null,
-  template: 'template_default.json'
+  template: 'template_default.json',
+  config: []
 })
 
 // 方法
@@ -532,6 +559,29 @@ const handleTraining = async () => {
   }
 }
 
+const handleMergeAnnotations = async (task: any) => {
+  try {
+    // 先检查任务是否已完成
+    const completionResponse = await axios.get(`/api/tasks/${task.id}/completion`)
+    if (!completionResponse.data.is_completed) {
+      ElMessage.warning('任务尚未完成所有标注')
+      return
+    }
+
+    // 执行合并
+    const response = await axios.post(`/api/tasks/${task.id}/merge`)
+    if (response.data.status === 'completed') {
+      ElMessage.success('标注结果合并成功')
+      // 重新加载任务列表以更新状态
+      loadTasks()
+    } else {
+      ElMessage.error('合并失败')
+    }
+  } catch (error) {
+    ElMessage.error('合并失败: ' + (error.response?.data?.detail || error.message))
+  }
+}
+
 const loadTasks = async () => {
   try {
     const response = await axios.get('/api/tasks')
@@ -539,6 +589,16 @@ const loadTasks = async () => {
   } catch (error) {
     ElMessage.error('加载任务列表失败')
   }
+}
+
+// 添加字段
+const addField = () => {
+  createTaskForm.value.config.push({ path: '', type: '' })
+}
+
+// 删除字段
+const removeField = (index: number) => {
+  createTaskForm.value.config.splice(index, 1)
 }
 
 // 生命周期
@@ -582,4 +642,4 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 10px;
 }
-</style> 
+</style>

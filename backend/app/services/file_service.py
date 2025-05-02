@@ -7,7 +7,7 @@ from ..models.document import Document
 class FileService:
     """文件处理服务"""
     
-    def __init__(self, upload_dir: str = "data/raw"):
+    def __init__(self, upload_dir: str = "data/raw/upload"):
         # 使用绝对路径
         self.upload_dir = os.path.abspath(upload_dir)
         print(f"文件上传目录: {self.upload_dir}")  # 添加调试信息
