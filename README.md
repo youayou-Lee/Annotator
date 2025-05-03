@@ -1,93 +1,144 @@
-# Annotator
+# 文书标注系统
 
+这是一个用于法律文书数据处理、标注和训练的完整系统。系统支持从原始数据导入到模型训练的全流程处理。
 
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+## 系统架构
 
 ```
-cd existing_repo
-git remote add origin http://47.113.216.116/youayou/annotator.git
-git branch -M main
-git push -uf origin main
+.
+├── backend/                 # 后端服务
+│   ├── app/                # 主应用
+│   │   ├── api/           # API路由层
+│   │   ├── core/          # 核心配置
+│   │   ├── models/        # 数据模型
+│   │   ├── schemas/       # 数据验证模式
+│   │   └── services/      # 业务逻辑层
+├── frontend/               # 前端应用
+│   ├── src/               # 源代码
+│   │   ├── components/    # 通用组件
+│   │   ├── views/         # 页面组件
+│   │   └── router/        # 路由配置
+└── data/                  # 数据存储
+    ├── raw/               # 原始数据
+    ├── formatted/         # 格式化数据
+    ├── annotations/       # 标注结果
+    ├── task_templates/    # 任务模板
+    └── merged_data/       # 合并后的数据
+
 ```
 
-## Integrate with your tools
+## 功能模块
 
-- [ ] [Set up project integrations](http://47.113.216.116/youayou/annotator/-/settings/integrations)
+### 1. 数据处理流程 (backend/app/services/file_service.py)
+- 文件上传：支持大规模JSON/JSONL格式的文书数据上传
+- 数据验证：确保上传数据的完整性和格式正确性
+- 文件管理：统一管理上传的文件，支持查询和检索
 
-## Collaborate with your team
+### 2. 数据过滤 (backend/app/services/filter_service.py)
+- 条件筛选：支持多维度的数据筛选（法院、案件类型等）
+- 内容过滤：支持基于文本内容的精确匹配
+- 批量处理：支持对大规模数据进行高效过滤
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+### 3. 格式化处理 (backend/app/services/format_service.py)
+- 模板管理：支持自定义数据格式化模板
+- 批量转换：将原始数据转换为标准格式
+- 数据验证：确保转换后的数据符合预期格式
 
-## Test and Deploy
+### 4. 任务管理 (backend/app/services/task_service.py)
+- 任务创建：支持创建不同类型的标注任务
+- 任务分配：管理任务分配和进度跟踪
+- 状态管理：实时监控任务完成情况
+- 模板配置：支持自定义任务模板
 
-Use the built-in continuous integration in GitLab.
+### 5. 人工标注 (backend/app/services/annotator_service.py)
+- 标注界面：直观的Web标注界面
+- 实时保存：自动保存标注进度
+- 批注验证：确保标注数据的质量
+- 进度追踪：实时显示标注进度
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+### 6. AI辅助审查 (backend/app/services/ai_review_service.py)
+- AI审查：使用GPT模型辅助审查标注结果
+- 对比分析：比较AI审查和人工标注的差异
+- 质量控制：提供标注质量的客观评估
 
-***
+### 7. 训练数据准备 (backend/app/services/training_service.py)
+- 数据转换：将标注数据转换为训练格式
+- 数据集划分：自动划分训练集和验证集
+- 格式验证：确保数据符合训练要求
 
-# Editing this README
+### 8. 模型训练和验证
+- OpenAI接入：支持直接提交到OpenAI进行训练
+- 训练监控：实时监控训练进度
+- 模型验证：使用验证集评估模型性能
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## 快速开始
 
-## Suggestions for a good README
+### 后端服务
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+1. 创建Python虚拟环境：
+```bash
+conda create -n annotator python=3.9.5
+conda activate annotator
+```
 
-## Name
-Choose a self-explaining name for your project.
+2. 安装依赖：
+```bash
+pip install -r requirements.txt
+```
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+3. 启动服务：
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+### 前端应用
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+1. 安装依赖：
+```bash
+cd frontend
+npm install
+```
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+2. 启动开发服务器：
+```bash
+npm run dev
+```
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+## 使用流程
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+1. 数据导入
+   - 通过Web界面上传原始文书数据
+   - 系统自动验证数据格式
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+2. 数据过滤
+   - 设置过滤条件（法院、案件类型等）
+   - 执行过滤，获取目标数据集
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+3. 格式化处理
+   - 选择或创建格式化模板
+   - 执行格式化转换
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+4. 任务创建
+   - 创建标注任务
+   - 配置任务参数和标注要求
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+5. 人工标注
+   - 分配标注任务
+   - 进行标注工作
+   - 保存标注结果
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+6. AI审查
+   - 配置审查模板
+   - 执行AI辅助审查
+   - 分析审查结果
 
-## License
-For open source projects, say how it is licensed.
+7. 训练准备
+   - 合并标注结果
+   - 转换为训练格式
+   - 划分数据集
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+8. 模型训练
+   - 提交训练任务
+   - 监控训练进度
+   - 验证模型效果

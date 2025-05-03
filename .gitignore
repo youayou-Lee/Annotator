@@ -1,0 +1,11 @@
+frontend/node_modules/
+.idea
+backend/app/api/__pycache__
+backend/app/services/__pycache__
+
+
+backend\data\raw\upload
+backend/data/raw/oringinal_data/*.jsonl
+exampleData/
+
+backend\data\raw\example.json
