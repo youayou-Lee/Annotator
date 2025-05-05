@@ -1,62 +1,51 @@
-from typing import Dict, Any, Optional
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, JSON, DateTime, ForeignKey, Boolean
-from sqlalchemy.orm import relationship
-from app.database import Base
 
-class Document(Base):
-    __tablename__ = "documents"
 
-    id = Column(Integer, primary_key=True, index=True)
-    doc_id = Column(String, unique=True, index=True)
-    content = Column(JSON)
-    status = Column(String)  # raw, processed, annotated
-    is_annotated = Column(Boolean, default=False)
-    is_ai_reviewed = Column(Boolean, default=False)
-    is_training_ready = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    task_id = Column(Integer, ForeignKey("tasks.id"))
-    task = relationship("Task", back_populates="documents")
-    
-    # 元数据字段
-    court = Column(String)  # 法院
-    case_type = Column(String)  # 案件类型
-    case_number = Column(String)  # 案号
-    judgment_date = Column(DateTime)  # 判决日期
-    
-    # 标注相关字段
-    annotation_data = Column(JSON)  # 标注数据
-    ai_review_data = Column(JSON)  # AI审查数据
-    training_data = Column(JSON)  # 训练数据
-    
-    # 关联标注任务
-    annotations = relationship("Annotation", back_populates="document")
 
-class Annotation(Base):
-    __tablename__ = "annotations"
+class LegalBasis(BaseModel):
+    """法定刑裁判依据"""
+    罪名: str
+    构成要件判断: str
 
-    id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"))
-    annotator_id = Column(Integer, ForeignKey("users.id"))
-    content = Column(JSON)
-    status = Column(String)  # pending, completed, reviewed
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+class MainPunishment(BaseModel):
+    """主刑"""
+    管制: Optional[int] = None
+    拘役: Optional[int] = None
+    有期徒刑: Optional[int] = None
+    无期徒刑: Optional[bool] = None
+    死刑: Optional[bool] = None
 
-    document = relationship("Document", back_populates="annotations")
-    annotator = relationship("User", back_populates="annotations")
+class AdditionalPunishment(BaseModel):
+    """附加刑"""
+    罚金: Optional[int] = None
+    剥夺政治权利: Optional[bool] = None
+    没收财产: Optional[str] = None
+    驱逐出境: Optional[bool] = None
+
+class JudgmentResult(BaseModel):
+    """裁判结果"""
+    主刑: MainPunishment
+    附加刑: AdditionalPunishment
+    是否缓刑: bool
+    第一层面量刑调节要素: List[str]
+    第二层面量刑调节要素: List[str]
+    法定刑区间: str
+    与宣告刑是否一致: bool
+
+class JudgmentDetail(BaseModel):
+    """裁判详情模型"""
+    被告人姓名: str
+    法定刑裁判依据: LegalBasis
+    裁判结果: JudgmentResult
 
 class Document(BaseModel):
-    """文书数据模型"""
-    id: str = Field(..., description="文书唯一标识")
-    content: Dict[str, Any] = Field(..., description="文书内容")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="元数据")
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
-    status: str = Field(default="pending", description="文书状态")
-    annotations: Dict[str, Any] = Field(default_factory=dict, description="标注信息")
-    
-    class Config:
-        arbitrary_types_allowed = True 
+    """文书模型"""
+    id: str
+    当事人: List[str]
+    裁判文书名: str
+    案件经过: str
+    s25: str
+    s26: str
+    s27: str
+    裁判详情: List[JudgmentDetail]

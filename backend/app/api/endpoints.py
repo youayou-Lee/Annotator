@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from typing import List, Dict, Any, Optional
 from ..models.document import Document
-from ..models.task import Task
 from ..services.filter_service import FilterService
 from ..services.format_service import FormatService
 from ..services.annotator_service import AnnotatorService
@@ -41,7 +40,7 @@ def get_task_service():
 # 格式化服务路由
 @router.get("/format/default-template")
 def get_default_template():
-    """获取默认的格式化模板"""
+    """获取默认的格式化模板-用于前端页面展示"""
     try:
         template_path = "data/task_templates/template_default.json"
         with open(template_path, 'r', encoding='utf-8') as f:
