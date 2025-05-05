@@ -5,7 +5,7 @@ import os, glob
 from datetime import datetime
 import jsonlines
 from fastapi import UploadFile, HTTPException
-from backend.app.schemas import JsonChecker
+from ..schemas import JsonChecker
 from pathlib import Path
 class FormatService:
     """格式化存储服务"""

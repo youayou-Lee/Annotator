@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 from typing import Type, Dict, Any, List, Optional, Union
 from pydantic import BaseModel, ValidationError
-from backend.app.models import Document
 from pydantic_core import PydanticUndefined, PydanticCustomError
 class JsonChecker:
     def __init__(self, model_file: Optional[Path] = None, default_model: Optional[Type[BaseModel]] = None):
@@ -220,54 +219,3 @@ class JsonChecker:
             return self.fill_template(data)
         else:
             raise ValueError(f"未知模式: {mode}")
-def test_1():
-    # 1. 用户不提供模型文件，使用默认模型
-    checker = JsonChecker(default_model=Document)
-
-    # 测试数据
-    file_path = r"E:\WorkBase\proj\Annotator\exampleData\example_copy.json"
-    with open(file_path, "r", encoding="utf-8") as f:
-        test_data = json.load(f)[0]
-    # test_data = {
-    #     "name": "Alice",
-    #     "age": "25",  # 字符串，应该会被填充为默认值
-    #     "extra_field": "this will be ignored"
-    # }
-
-    print("=== 校验测试 ===")
-    try:
-        validated = checker.validate(test_data)
-        print("校验通过:", validated)
-    except ValidationError as e:
-        print("校验失败:", str(e))
-
-    print("\n=== 填充测试 ===")
-    filled = checker.fill_template(test_data)
-    print("填充结果:", filled)
-
-def test_2():
-    # 2. 用户提供模型文件
-
-    # 使用用户模型
-    try:
-        user_checker = JsonChecker(model_file=Path(r"../../data/BaseModels/ex1.py"))
-        user_data = {
-            "嫌疑人": [],
-            "被告人": ["张三"],
-            "类型": "辨认笔录",
-            "摘要": "到此一游"
-        }
-        print("\n=== 使用用户模型校验 ===")
-        print("校验结果:", user_checker.validate(user_data))
-
-        partial_data = {
-            "被告人": ["张三"],
-            "摘要": "到此一游"
-        }
-        print("\n=== 使用用户模型填充 ===")
-        print("填充结果:", user_checker.fill_template(partial_data))
-    except Exception as e:
-        print(f"加载用户模型失败: {str(e)}")
-# 示例使用
-if __name__ == "__main__":
-    test_2()
