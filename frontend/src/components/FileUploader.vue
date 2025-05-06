@@ -52,7 +52,7 @@ import {
 const props = defineProps({
   accept: {
     type: String,
-    default: '.json,.jsonl'
+    default: '*' // 默认接受所有文件类型，由父组件控制具体限制
   },
   maxSize: {
     type: Number,
@@ -60,7 +60,7 @@ const props = defineProps({
   },
   tipText: {
     type: String,
-    default: '支持上传 JSON 或 JSONL 格式文件'
+    default: '请上传文件'
   },
   fileValidation: {
     type: Function,
@@ -81,11 +81,11 @@ const handleBeforeUpload: UploadProps['beforeUpload'] = (file) => {
     return false
   }
 
-  // 自定义验证
+  // 使用外部传入的验证函数
   if (props.fileValidation) {
     const validationResult = props.fileValidation(file)
     if (validationResult !== true) {
-      ElMessage.error(validationResult || '文件验证失败')
+      ElMessage.error(typeof validationResult === 'string' ? validationResult : '文件验证失败')
       return false
     }
   }

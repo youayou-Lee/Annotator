@@ -19,6 +19,7 @@
             :accept="'.json,.jsonl'"
             :maxSize="100"
             :tipText="'请上传需要格式化的 JSON 或 JSONL 文件'"
+            :fileValidation="validateJsonFile"
             @file-selected="handleFileSelected"
             @file-removed="handleFileRemoved"
           />
@@ -55,10 +56,10 @@
             <el-tab-pane label="自定义模板" name="custom">
               <FileUploader
                 v-model:fileList="customTemplate"
-                :accept="'.json'"
+                :accept="'.py'"
                 :maxSize="1"
-                :tipText="'请上传 JSON 格式的模板文件'"
-                :fileValidation="validateTemplateFile"
+                :tipText="'请上传 py 格式的模板文件'"
+                :fileValidation="validatePythonFile"
                 @file-selected="handleTemplateSelected"
                 @file-removed="handleTemplateRemoved"
               />

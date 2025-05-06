@@ -9,3 +9,7 @@ backend/data/raw/oringinal_data/*.jsonl
 exampleData/
 
 backend\data\raw\example.json
+
+TODO.md
+
+clean.bat
