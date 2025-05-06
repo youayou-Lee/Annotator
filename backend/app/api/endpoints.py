@@ -71,77 +71,40 @@ async def process_jsonl_file(
     #     raise HTTPException(status_code=500, detail=str(e))
 
 # 文件上传
-# @router.post("/upload")
-# async def upload_file(
-#     file: UploadFile = File(...),
-#     type: str = Form("document"),
-#     file_service: FileService = Depends(get_file_service)
-# ):
-#     try:
-#         print(f"开始处理文件上传: {file.filename}")  # 添加日志
-#         print(f"文件类型: {file.content_type}")  # 添加日志
+@router.post("/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    file_service: FileService = Depends(get_file_service)
+):
+    try:
+        print(f"开始处理文件上传: {file.filename}")
         
-#         # 检查文件类型
-#         if not file.filename.endswith(('.json', '.jsonl')):
-#             raise HTTPException(
-#                 status_code=400,
-#                 detail="只支持上传JSON或JSONL格式的文件"
-#             )
+        # 检查文件类型
+        if not file.filename.endswith(('.json', '.jsonl')):
+            raise HTTPException(
+                status_code=400,
+                detail="只支持上传JSON或JSONL格式的文件"
+            )
         
-#         # 检查文件大小（限制为100MB）
-#         file_size = 0
-#         content = await file.read()
-#         file_size = len(content)
-#         print(f"文件大小: {file_size} 字节")  # 添加日志
+        # 检查文件大小（限制为100MB）
+        content = await file.read()
         
-#         if file_size == 0:
-#             raise HTTPException(
-#                 status_code=400,
-#                 detail="上传的文件内容为空"
-#             )
-#         if file_size > 100 * 1024 * 1024:  # 100MB
-#             raise HTTPException(
-#                 status_code=400,
-#                 detail="文件大小不能超过100MB"
-#             )
+        # 保存上传的文件
+        saved_filename = await file_service.save_upload_file(file, content)
         
-#         # 保存上传的文件
-#         print("开始保存文件...")  # 添加日志
-#         file_path = await file_service.save_upload_file(file, content)  # 传递文件内容
-#         print(f"文件保存成功: {file_path}")  # 添加日志
-        
-#         # 处理文件内容
-#         try:
-#             print("开始处理文件内容...")  # 添加日志
-#             documents = file_service.process_uploaded_file(file_path)
-#             print(f"成功处理 {len(documents)} 个文档")  # 添加日志
-#         except json.JSONDecodeError as e:
-#             raise HTTPException(
-#                 status_code=400,
-#                 detail=f"文件格式错误: {str(e)}"
-#             )
-#         except Exception as e:
-#             raise HTTPException(
-#                 status_code=500,
-#                 detail=f"处理文件时出错: {str(e)}"
-#             )
-        
-#         return {
-#             "code": 200,
-#             "message": "文件上传成功",
-#             "data": {
-#                 "file_id": file_path,  # 返回文件名
-#                 "document_count": len(documents)
-#             }
-#         }
-#     except HTTPException as he:
-#         raise he
-#     except Exception as e:
-#         print(f"上传文件时出错: {str(e)}")  # 添加日志
-#         raise HTTPException(
-#             status_code=500,
-#             detail=f"上传文件时出错: {str(e)}"
-#         )
+        return {
+            "code": 200,
+            "message": "文件上传成功",
+            "filename": saved_filename
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"上传文件时出错: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"上传文件时出错: {str(e)}"
+        )
 
 # 获取可用文件列表
 @router.get("/files")
@@ -206,7 +169,7 @@ async def format_documents(
         raise HTTPException(status_code=500, detail=str(e))
 
 # 创建标注任务
-@router.post("/tasks")
+@router.post("/create_Tasks")
 async def create_task(
     task_data: Dict[str, Any],
     task_service: TaskService = Depends(get_task_service)
@@ -340,7 +303,7 @@ async def check_training_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 # 获取任务列表
-@router.get("/tasks")
+@router.get("/get_Tasks_list")
 async def get_tasks(
     task_service: TaskService = Depends(get_task_service)
 ):

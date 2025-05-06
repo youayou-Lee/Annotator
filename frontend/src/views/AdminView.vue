@@ -446,10 +446,27 @@ const showCreateTaskDialog = () => {
   createTaskDialogVisible.value = true
 }
 
-const handleUploadSuccess = (file: File) => {
-  console.log('文件选择成功:', file)
-  createTaskForm.value.data_file = file
-  ElMessage.success('文件选择成功')
+const handleUploadSuccess = async (file: File) => {
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const response = await axios.post('/api/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    
+    if (response.data.code === 200) {
+      createTaskForm.value.data_file = response.data.filename
+      ElMessage.success('文件上传成功')
+    } else {
+      ElMessage.error('文件上传失败')
+    }
+  } catch (error) {
+    console.error('文件上传失败:', error)
+    ElMessage.error('文件上传失败: ' + (error.response?.data?.detail || error.message))
+  }
 }
 
 const handleUploadRemoved = () => {
@@ -463,8 +480,16 @@ const createTask = async () => {
       ElMessage.warning('请先上传数据文件')
       return
     }
-
-    const response = await axios.post('/api/tasks', createTaskForm.value)
+    
+    const taskData = {
+      name: createTaskForm.value.name,
+      description: createTaskForm.value.description,
+      data_file: createTaskForm.value.data_file,
+      template: createTaskForm.value.template || 'template_default.json',
+      config: createTaskForm.value.config
+    }
+    
+    const response = await axios.post('/api/create_Tasks', taskData)
     ElMessage.success('任务创建成功')
     createTaskDialogVisible.value = false
     loadTasks()
@@ -538,7 +563,7 @@ const handleMergeAnnotations = async (task: any) => {
 
 const loadTasks = async () => {
   try {
-    const response = await axios.get('/api/tasks')
+    const response = await axios.get('/api/get_Tasks_list')
     tasks.value = response.data.tasks
   } catch (error) {
     ElMessage.error('加载任务列表失败')

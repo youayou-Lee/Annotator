@@ -70,9 +70,10 @@ class TaskService:
         template_path = os.path.join(self.task_templates_dir, task_data['template'])
 
         # 如果没有提供config，则使用模板中的配置
-        print(task_data.get('config'))
+        # print(task_data.get('config'))
         task_config = TaskConfig()
-
+        
+        # print("123"*20,task_data['data_file'])
         # 创建任务对象
         task = Task(
             id=task_id,
