@@ -146,8 +146,8 @@ const canProcess = computed(() => {
 // 加载系统预设模板列表
 const loadSystemTemplates = async () => {
   try {
-    const response = await axios.get('/api/templates')
-    const templates = response.data.templates || []
+    const response = await axios.get('/api/format/template')
+    const templates = response.data || []
     systemTemplates.value = templates.map((t: string) => ({
       id: t,
       name: t,
@@ -162,7 +162,7 @@ const loadSystemTemplates = async () => {
 // 加载默认模板
 const loadDefaultTemplate = async () => {
   try {
-    const response = await axios.get('/api/format/default-template')
+    const response = await axios.get('/api/format/template')
     defaultTemplate.value = response.data
   } catch (error) {
     console.error('加载默认模板失败:', error)
@@ -189,9 +189,9 @@ const handleTemplateRemoved = () => {
 
 // 模板文件验证
 const validateTemplateFile = (file: File) => {
-  const isJson = file.name.endsWith('.json')
+  const isJson = file.name.endsWith('.py')
   if (!isJson) {
-    return '只能上传 JSON 格式文件!'
+    return '只能上传 PY 格式文件!'
   }
   return true
 }

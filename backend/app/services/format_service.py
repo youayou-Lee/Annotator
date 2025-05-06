@@ -16,6 +16,8 @@ class FormatService:
         # 确保默认模板目录存在
         os.makedirs("data/task_templates", exist_ok=True)
 
+        self.templates_dir = os.path.join("data", "format_templates")
+
     async def process_file(self, jsonl_file: UploadFile, template_file: Optional[UploadFile] = None) -> Dict[str, Any]:
         """处理上传的JSONL文件和Python模板文件"""
         # 验证输入文件
@@ -106,3 +108,13 @@ class FormatService:
                     os.rmdir(temp_dir)
             except Exception:
                 pass
+    def get_default_template(self) -> List[str]:
+        """获取默认模板文件列表"""
+        try:
+            templates = []
+            for filename in os.listdir(self.templates_dir):
+                if filename.endswith('.py'):
+                    templates.append(filename)
+            return templates
+        except Exception as e:
+            raise Exception(f"获取模板列表失败: {str(e)}")

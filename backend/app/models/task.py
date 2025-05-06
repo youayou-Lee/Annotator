@@ -59,7 +59,7 @@ class FieldConfig(BaseModel):
     """字段配置模型"""
     name: str = Field(..., description="字段名称")
     type: str = Field(..., description="字段类型", pattern="^(string|boolean|number|array)$")
-    path: str = Field(..., description="字段在文档中的路径")
+    # path: str = Field(..., description="字段在文档中的路径")
     description: str = Field(default="", description="字段描述")
 
 class TaskConfig(BaseModel):
@@ -70,18 +70,17 @@ class TaskConfig(BaseModel):
         """获取待标注的字段配置列表"""
         return [{"path": field.path, "type": field.type} for field in self.fields]
 
-    @classmethod
-    def from_template(cls, template_path: str, selected_fields: List[Dict[str, Any]]) -> 'TaskConfig':
-        """从模板文件创建配置"""
-        with open(template_path, 'r', encoding='utf-8') as f:
-            template = json.load(f)
-            
-        field_configs = []
-        for field in selected_fields:
-            field_configs.append(FieldConfig(
-                name=field["path"].split(".")[-1],
-                type=field["type"],
-                path=field["path"]
-            ))
-            
-        return cls(fields=field_configs)
+    def set_default_template(self) -> Dict[str, Any]:
+        """获取默认模板"""
+        with open("backend/app/config/template.json", "r", encoding="utf-8") as f:
+            template = json.load(f)["need_be_marked_list"]
+        
+        for item in template:
+            self.fields.append(FieldConfig(**item))
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        # 初始化后自动调用set_default_template
+        if not self.fields:
+            self.set_default_template()
+

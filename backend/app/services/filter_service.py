@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class FilterService:
     """数据过滤服务"""
     
-    def __init__(self, raw_data_dir=os.path.join("backend", "data", "raw", "oringinal_data")):
+    def __init__(self, raw_data_dir=os.path.join("backend", "data", "oringinal_data")):
         # 如果是相对路径，转换为绝对路径
         if not os.path.isabs(raw_data_dir):
             # 获取当前文件所在目录
@@ -45,7 +45,7 @@ class FilterService:
         files = []
         try:
             for file in os.listdir(self.raw_data_dir):
-                if file.endswith('.jsonl'):
+                if file.endswith('.jsonl') or file.endswith('.json'):
                     files.append(file)
         except Exception as e:
             logger.error(f"获取文件列表失败: {str(e)}")

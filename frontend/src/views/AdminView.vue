@@ -246,7 +246,7 @@
             <el-table-column label="字段路径">
               <template #default="{ row }">
                 <el-select
-                  v-model="row.path"
+                  v-model="row.key"
                   filterable
                   allow-create
                   default-first-option
@@ -547,7 +547,7 @@ const loadTasks = async () => {
 
 // 添加字段
 const addField = () => {
-  createTaskForm.value.config.push({ path: '', type: '' })
+  createTaskForm.value.config.push({ key: '', type: '' })
 }
 
 // 删除字段

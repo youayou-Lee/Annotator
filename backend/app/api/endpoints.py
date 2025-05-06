@@ -38,14 +38,15 @@ def get_task_service():
     return TaskService(upload_dir="data/raw/upload", task_templates_dir="data/task_templates")
 
 # 格式化服务路由
-@router.get("/format/default-template")
-def get_default_template():
-    """获取默认的格式化模板-用于前端页面展示"""
+@router.get("/format/template")
+def get_default_format_template(
+    format_service: FormatService = Depends(get_format_service)
+):
+    """获取格式化模板"""
     try:
-        template_path = "data/task_templates/template_default.json"
-        with open(template_path, 'r', encoding='utf-8') as f:
-            template = json.load(f)
-        return template
+        print("获取默认格式化模板...",format_service.get_default_template())  # 添加日志
+        return format_service.get_default_template()
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"无法读取默认模板: {str(e)}")
 
