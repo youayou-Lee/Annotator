@@ -7,11 +7,10 @@
       :before-upload="handleBeforeUpload"
       :on-change="handleChange"
       :on-remove="handleRemove"
-      :limit="1"
       :accept="accept"
       :auto-upload="false"
-      :on-exceed="handleExceed"
       drag
+      multiple
     >
       <el-icon class="el-icon--upload"><upload-filled /></el-icon>
       <div class="el-upload__text">
@@ -24,16 +23,28 @@
       </template>
     </el-upload>
     
-    <div v-if="fileList.length" class="file-info">
-      <el-card size="small" class="file-card">
+    <div v-if="fileList.length" class="file-list">
+      <el-card v-for="file in fileList" 
+               :key="file.uid" 
+               size="small" 
+               class="file-card">
         <template #header>
           <div class="file-header">
             <el-icon><Document /></el-icon>
-            {{ fileList[0].name }}
+            {{ file.name }}
+            <el-button
+              type="danger"
+              size="small"
+              circle
+              @click="handleRemove(file)"
+              class="delete-button"
+            >
+              <el-icon><Delete /></el-icon>
+            </el-button>
           </div>
         </template>
-        <el-tag size="small" v-if="fileList[0].size">
-          {{ formatFileSize(fileList[0].size) }}
+        <el-tag size="small" v-if="file.size">
+          {{ formatFileSize(file.size) }}
         </el-tag>
       </el-card>
     </div>
@@ -41,12 +52,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, defineEmits, defineProps } from 'vue'
+import { ref, defineEmits, defineProps } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { UploadProps, UploadRawFile } from 'element-plus'
 import {
   Document,
-  UploadFilled
+  UploadFilled,
+  Delete
 } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -96,17 +108,18 @@ const handleBeforeUpload: UploadProps['beforeUpload'] = (file) => {
 // 处理文件改变
 const handleChange: UploadProps['onChange'] = (uploadFile) => {
   if (uploadFile.status === 'ready') {
-    fileList.value = [uploadFile.raw]
-    emit('update:fileList', fileList.value)
+    // 直接使用 el-upload 组件的 fileList
+    fileList.value = uploadFile.raw ? [...fileList.value, uploadFile] : fileList.value
+    emit('update:fileList', fileList.value.map(file => file.raw))
     emit('file-selected', uploadFile.raw)
   }
 }
 
 // 处理文件移除
-const handleRemove = () => {
-  fileList.value = []
-  emit('update:fileList', fileList.value)
-  emit('file-removed')
+const handleRemove = (file: any) => {
+  fileList.value = fileList.value.filter(item => item.uid !== file.uid)
+  emit('update:fileList', fileList.value.map(file => file.raw))
+  emit('file-removed', file.raw)
 }
 
 // 处理超出文件限制
@@ -141,18 +154,26 @@ const formatFileSize = (bytes: number) => {
   width: 100%;
 }
 
-.file-info {
+.file-list {
   margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
 }
 
 .file-card {
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .file-header {
   display: flex;
   align-items: center;
   gap: 8px;
+  position: relative;
+}
+
+.delete-button {
+  margin-left: auto;
 }
 
 .el-upload__text {
