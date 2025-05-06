@@ -246,7 +246,7 @@
             <el-table-column label="字段路径">
               <template #default="{ row }">
                 <el-select
-                  v-model="row.path"
+                  v-model="row.key"
                   filterable
                   allow-create
                   default-first-option
@@ -282,31 +282,14 @@
           </div>
         </el-form-item>
         <el-form-item label="数据文件" required>
-          <el-upload
-            class="upload-demo"
-            action="/api/upload"
-            :on-success="handleUploadSuccess"
-            :on-error="handleUploadError"
-            :before-upload="beforeUpload"
-            :headers="{
-              'Accept': 'application/json'
-            }"
-            :data="{
-              type: 'document'
-            }"
-            :auto-upload="true"
-            :show-file-list="true"
-            :limit="1"
-            name="file"
-            accept=".json,.jsonl"
-          >
-            <el-button type="primary">选择文件</el-button>
-            <template #tip>
-              <div class="el-upload__tip">
-                支持上传JSON或JSONL格式的数据文件
-              </div>
-            </template>
-          </el-upload>
+          <FileUploader
+            v-model:fileList="createTaskForm.uploadedFiles"
+            :accept="'.json,.jsonl'"
+            :maxSize="100"
+            :tipText="'支持上传JSON或JSONL格式的数据文件'"
+            @file-selected="handleUploadSuccess"
+            @file-removed="handleUploadRemoved"
+          />
         </el-form-item>
         <el-form-item label="任务模板">
           <el-select v-model="createTaskForm.template" placeholder="请选择任务模板">
@@ -342,6 +325,7 @@ import {
   Connection
 } from '@element-plus/icons-vue'
 import FormatUploader from '../components/FormatUploader.vue'
+import FileUploader from '../components/FileUploader.vue'
 
 const router = useRouter()
 
@@ -384,7 +368,8 @@ const createTaskForm = ref({
   description: '',
   data_file: null,
   template: 'template_default.json',
-  config: []
+  config: [],
+  uploadedFiles: [] // 新增用于 FileUploader 的文件列表
 })
 
 // 方法
@@ -461,46 +446,15 @@ const showCreateTaskDialog = () => {
   createTaskDialogVisible.value = true
 }
 
-const handleUploadSuccess = (response: any) => {
-  console.log('上传成功响应:', response)  // 添加调试信息
-  if (response.code === 200) {
-    createTaskForm.value.data_file = response.data.file_id
-    ElMessage.success('文件上传成功')
-  } else {
-    ElMessage.error(response.message || '文件上传失败')
-  }
+const handleUploadSuccess = (file: File) => {
+  console.log('文件选择成功:', file)
+  createTaskForm.value.data_file = file
+  ElMessage.success('文件选择成功')
 }
 
-const handleUploadError = (error: any) => {
-  console.error('上传错误:', error)  // 添加调试信息
-  ElMessage.error('文件上传失败: ' + (error.response?.data?.detail || error.message || '未知错误'))
-}
-
-const beforeUpload = (file: File) => {
-  console.log('准备上传文件:', file)  // 添加调试信息
-  
-  // 检查文件类型
-  const isJSON = file.name.endsWith('.json')
-  const isJSONL = file.name.endsWith('.jsonl')
-  if (!isJSON && !isJSONL) {
-    ElMessage.error('只能上传JSON或JSONL文件')
-    return false
-  }
-  
-  // 检查文件大小（限制为100MB）
-  const isLt100M = file.size / 1024 / 1024 < 100
-  if (!isLt100M) {
-    ElMessage.error('文件大小不能超过100MB')
-    return false
-  }
-  
-  // 检查文件是否为空
-  if (file.size === 0) {
-    ElMessage.error('文件内容不能为空')
-    return false
-  }
-  
-  return true
+const handleUploadRemoved = () => {
+  console.log('文件已移除')
+  createTaskForm.value.data_file = null
 }
 
 const createTask = async () => {
@@ -593,7 +547,7 @@ const loadTasks = async () => {
 
 // 添加字段
 const addField = () => {
-  createTaskForm.value.config.push({ path: '', type: '' })
+  createTaskForm.value.config.push({ key: '', type: '' })
 }
 
 // 删除字段

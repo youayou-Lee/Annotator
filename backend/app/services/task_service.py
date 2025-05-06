@@ -60,37 +60,37 @@ class TaskService:
                 - description: 任务描述 
                 - data_file: 数据文件
                 - template: 任务模板名称
-                - config: 可标注字段配置列表，每个字段包含path和type
+                - config: 可标注字段配置列表，每个字段包含value和type
         """
-        try:
-            # 生成任务ID
-            task_id = str(uuid.uuid4())
-            
-            # 从模板创建任务配置
-            template_path = os.path.join(self.task_templates_dir, task_data['template'])
-            task_config = TaskConfig.from_template(
-                template_path=template_path,
-                selected_fields=task_data.get('config', [])
-            )
+        # try:
+        
+        # 生成任务ID
+        task_id = str(uuid.uuid4())
+        
+        template_path = os.path.join(self.task_templates_dir, task_data['template'])
 
-            # 创建任务对象
-            task = Task(
-                id=task_id,
-                name=task_data['name'],
-                description=task_data['description'],
-                files_path=[task_data['data_file']],
-                config=task_config.get_beMarked(),  # 将TaskConfig转换为字段配置列表
-                status=TaskStatus.PENDING,
-                created_at=datetime.now(),
-                updated_at=datetime.now()
-            )
+        # 如果没有提供config，则使用模板中的配置
+        print(task_data.get('config'))
+        task_config = TaskConfig()
 
-            # 保存任务配置
-            self.save_task(task)
-            return task
+        # 创建任务对象
+        task = Task(
+            id=task_id,
+            name=task_data['name'],
+            description=task_data['description'],
+            files_path=[task_data['data_file']],
+            config=task_config.get_beMarked(),  # 将TaskConfig转换为字段配置列表
+            status=TaskStatus.PENDING,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
 
-        except Exception as e:
-            raise Exception(f"创建任务失败: {str(e)}")
+        # 保存任务配置
+        self.save_task(task)
+        return task
+
+        # except Exception as e:
+        #     raise Exception(f"创建任务失败: {str(e)}")
     
     def get_task(self, task_id: str) -> Optional[Task]:
         """获取任务信息"""
