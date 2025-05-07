@@ -526,11 +526,12 @@ async def get_task_config(
                         "key": field.key,
                         "type": field.type,
                         "description": field.description or "",
-                        "path": field.path or field.key  # 如果没有path就用key
+                        "paths": field.paths,  # 返回所有可能的路径
+                        "isMultiple": field.isMultiple  # 指示是否是多值字段
                     }
                     for field in task_config.fields
                 ],
-                "beMarked": [field.key for field in task_config.fields]  # 使用key而不是path
+                "beMarked": task_config.get_beMarked()  # 使用更新后的get_beMarked方法
             }
         }
     except Exception as e:

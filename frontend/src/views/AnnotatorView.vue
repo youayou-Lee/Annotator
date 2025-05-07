@@ -43,61 +43,115 @@
                 </div>
               </template>
               <el-form :model="currentDocument" label-width="120px">
-                <el-form-item 
-                  v-for="field in generateAnnotationFields" 
-                  :key="field.key" 
-                  :label="field.label"
-                >
-                  <template v-if="field.type === 'number'">
-                    <el-input-number
-                      :model-value="getFieldValue(currentDocument, field.key)"
-                      @update:model-value="(val) => setFieldValue(currentDocument, field.key, val)"
-                      :placeholder="`请输入${field.label}`"
-                      :disabled="false"
-                    />
-                  </template>
+                <template v-for="field in generateAnnotationFields" :key="field.key">
+                  <!-- 多值字段处理 -->
+                  <template v-if="field.isMultiple">
+                    <div class="multiple-field-container">
+                      <div class="multiple-field-header">
+                        <span>{{ field.label }}</span>
+                        <el-tag size="small" type="info">多值字段</el-tag>
+                      </div>
+                      <div v-for="(path, index) in field.paths" :key="path" class="multiple-field-item">
+                        <el-form-item :label="'值 ' + (index + 1)">
+                          <template v-if="field.type === 'number'">
+                            <el-input-number
+                              :model-value="getFieldValue(currentDocument, path)"
+                              @update:model-value="(val) => setFieldValue(currentDocument, path, val)"
+                              :placeholder="`请输入${field.label}`"
+                            />
+                          </template>
 
-                  <template v-else-if="field.type === 'boolean'">
-                    <el-switch
-                      :model-value="getFieldValue(currentDocument, field.key)"
-                      @update:model-value="(val) => setFieldValue(currentDocument, field.key, val)"
-                      :disabled="false"
-                    />
-                  </template>
+                          <template v-else-if="field.type === 'boolean'">
+                            <el-switch
+                              :model-value="getFieldValue(currentDocument, path)"
+                              @update:model-value="(val) => setFieldValue(currentDocument, path, val)"
+                            />
+                          </template>
 
-                  <template v-else-if="field.type === 'array'">
-                    <el-select
-                      :model-value="getFieldValue(currentDocument, field.key)"
-                      @update:model-value="(val) => setFieldValue(currentDocument, field.key, val)"
-                      multiple
-                      filterable
-                      allow-create
-                      default-first-option
-                      style="width: 100%"
-                      :disabled="false"
-                    >
-                      <el-option
-                        v-for="item in getFieldValue(currentDocument, field.key) || []"
-                        :key="item"
-                        :label="item"
-                        :value="item"
-                      />
-                    </el-select>
-                  </template>
+                          <template v-else-if="field.type === 'array'">
+                            <el-select
+                              :model-value="getFieldValue(currentDocument, path)"
+                              @update:model-value="(val) => setFieldValue(currentDocument, path, val)"
+                              multiple
+                              filterable
+                              allow-create
+                              default-first-option
+                              style="width: 100%"
+                            >
+                              <el-option
+                                v-for="item in getFieldValue(currentDocument, path) || []"
+                                :key="item"
+                                :label="item"
+                                :value="item"
+                              />
+                            </el-select>
+                          </template>
 
+                          <template v-else>
+                            <el-input
+                              :model-value="getFieldValue(currentDocument, path)"
+                              @update:model-value="(val) => setFieldValue(currentDocument, path, val)"
+                              :type="getInputType(field.key, getFieldValue(currentDocument, path))"
+                              :autosize="{ minRows: 2, maxRows: 4 }"
+                              :placeholder="`请输入${field.label}`"
+                            />
+                          </template>
+                        </el-form-item>
+                      </div>
+                    </div>
+                  </template>
+                  
+                  <!-- 单值字段处理 -->
                   <template v-else>
-                    <el-input
-                      :model-value="getFieldValue(currentDocument, field.key)"
-                      @update:model-value="(val) => setFieldValue(currentDocument, field.key, val)"
-                      :type="getInputType(field.key, getFieldValue(currentDocument, field.key))"
-                      :autosize="{ minRows: 2, maxRows: 4 }"
-                      :placeholder="`请输入${field.label}`"
-                      :disabled="false"
-                    />
+                    <el-form-item :label="field.label">
+                      <template v-if="field.type === 'number'">
+                        <el-input-number
+                          :model-value="getFieldValue(currentDocument, field.paths[0])"
+                          @update:model-value="(val) => setFieldValue(currentDocument, field.paths[0], val)"
+                          :placeholder="`请输入${field.label}`"
+                        />
+                      </template>
+
+                      <template v-else-if="field.type === 'boolean'">
+                        <el-switch
+                          :model-value="getFieldValue(currentDocument, field.paths[0])"
+                          @update:model-value="(val) => setFieldValue(currentDocument, field.paths[0], val)"
+                        />
+                      </template>
+
+                      <template v-else-if="field.type === 'array'">
+                        <el-select
+                          :model-value="getFieldValue(currentDocument, field.paths[0])"
+                          @update:model-value="(val) => setFieldValue(currentDocument, field.paths[0], val)"
+                          multiple
+                          filterable
+                          allow-create
+                          default-first-option
+                          style="width: 100%"
+                        >
+                          <el-option
+                            v-for="item in getFieldValue(currentDocument, field.paths[0]) || []"
+                            :key="item"
+                            :label="item"
+                            :value="item"
+                          />
+                        </el-select>
+                      </template>
+
+                      <template v-else>
+                        <el-input
+                          :model-value="getFieldValue(currentDocument, field.paths[0])"
+                          @update:model-value="(val) => setFieldValue(currentDocument, field.paths[0], val)"
+                          :type="getInputType(field.key, getFieldValue(currentDocument, field.paths[0]))"
+                          :autosize="{ minRows: 2, maxRows: 4 }"
+                          :placeholder="`请输入${field.label}`"
+                        />
+                      </template>
+                    </el-form-item>
                   </template>
                   
                   <span v-if="field.description" class="field-description">{{ field.description }}</span>
-                </el-form-item>
+                </template>
               </el-form>
             </el-card>
             
@@ -315,38 +369,47 @@ const setFieldValue = (document: any, field: string, value: any) => {
   }
 }
 
+// 获取当前文档中某个字段的所有路径
+const findPathsInDocument = (document: any, key: string, currentPath: string = ""): string[] => {
+  const paths: string[] = []
+  
+  if (!document) return paths
+
+  if (typeof document === 'object') {
+    for (const [k, v] of Object.entries(document)) {
+      const newPath = currentPath ? `${currentPath}.${k}` : k
+      if (k === key) {
+        paths.push(newPath)
+      }
+      if (Array.isArray(v)) {
+        v.forEach((item, index) => {
+          const arrayPath = `${newPath}[${index}]`
+          paths.push(...findPathsInDocument(item, key, arrayPath))
+        })
+      } else if (typeof v === 'object' && v !== null) {
+        paths.push(...findPathsInDocument(v, key, newPath))
+      }
+    }
+  }
+  
+  return paths
+}
+
 // 生成标注字段
 const generateAnnotationFields = computed(() => {
   if (!taskConfig.value?.fields || !currentDocument.value) return []
   
   return taskConfig.value.fields.map((field) => {
-    let value = getFieldValue(currentDocument.value, field.key)
-    
-    // 根据类型设置默认值
-    if (value === undefined) {
-      switch (field.type) {
-        case 'boolean':
-          value = false
-          break
-        case 'number':
-          value = 0
-          break
-        case 'array':
-          value = []
-          break
-        default:
-          value = ''
-      }
-      // 设置初始值到文档中
-      setFieldValue(currentDocument.value, field.key, value)
-    }
+    // 在当前文档中查找这个字段的所有路径
+    const paths = findPathsInDocument(currentDocument.value, field.key)
     
     return {
       key: field.key,
-      label: field.key, // 使用key作为显示标签
+      label: field.key,
       type: field.type,
-      value: value,
-      description: field.description
+      description: field.description,
+      isMultiple: paths.length > 1,
+      paths: paths.length > 0 ? paths : [field.key] // 如果找不到路径，使用默认路径
     }
   })
 })
@@ -354,15 +417,68 @@ const generateAnnotationFields = computed(() => {
 const saveAnnotation = async () => {
   try {
     const documentId = currentDocument.value?.id || currentDocument.value?.s5
+    if (!documentId) {
+      throw new Error('文档ID不存在')
+    }
     
-    // 创建标注对象，只包含任务配置中定义的字段
+    // 创建标注对象
     const annotation = {}
-    for (const field of taskConfig.value.fields) {
-      if (field.key in currentDocument.value) {
-        annotation[field.key] = currentDocument.value[field.key]
-      }
+    
+    // 获取当前文档中的实际字段路径
+    const currentFields = generateAnnotationFields.value
+    
+    for (const field of currentFields) {
+      const paths = field.paths || []
+      
+      // 确保路径有效
+      if (paths.length === 0) continue
+
+      // 处理每个路径
+      paths.forEach(path => {
+        const value = getFieldValue(currentDocument.value, path)
+        if (value !== undefined) {
+          // 使用点号分割路径并创建嵌套对象
+          let target = annotation
+          const parts = path.split('.')
+          
+          for (let i = 0; i < parts.length - 1; i++) {
+            const part = parts[i]
+            // 处理数组索引
+            if (!isNaN(Number(part))) {
+              const index = Number(part)
+              // 确保父级是数组
+              if (!Array.isArray(target)) {
+                target = []
+              }
+              // 初始化数组到所需长度
+              while (target.length <= index) {
+                target.push({})
+              }
+              if (!target[index]) {
+                target[index] = {}
+              }
+              target = target[index]
+            } else {
+              // 处理对象属性
+              if (!target[part] || typeof target[part] !== 'object') {
+                target[part] = {}
+              }
+              target = target[part]
+            }
+          }
+          
+          // 设置最终值
+          const lastPart = parts[parts.length - 1]
+          if (field.type === 'number') {
+            target[lastPart] = value === '' ? 0 : Number(value)
+          } else {
+            target[lastPart] = value
+          }
+        }
+      })
     }
 
+    // 发送到后端
     await axios.post(
       `/api/tasks/${taskId.value}/annotations/${documentId}`, 
       annotation
@@ -537,6 +653,47 @@ onMounted(async () => {
   
   .history-card {
     height: 300px;
+  }
+
+  .multiple-field-container {
+    border: 1px solid #e4e7ed;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 20px;
+    background-color: #f8f9fb;
+
+    .multiple-field-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e4e7ed;
+
+      span {
+        font-weight: bold;
+        font-size: 14px;
+      }
+    }
+
+    .multiple-field-item {
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      background-color: #fff;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  .field-description {
+    display: block;
+    font-size: 12px;
+    color: #909399;
+    margin: 5px 0 15px 120px;
   }
 }
 </style>

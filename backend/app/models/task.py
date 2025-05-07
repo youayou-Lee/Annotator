@@ -66,8 +66,9 @@ class FieldConfig(BaseModel):
     """字段配置模型"""
     key: str = Field(..., description="字段名称")
     type: str = Field(..., description="字段类型", pattern="^(string|boolean|number|array)$")
-    path: str = Field(default="", description="字段在文档中的路径")
+    paths: List[str] = Field(default_factory=list, description="字段在文档中的所有可能路径")
     description: str = Field(default="", description="字段描述")
+    isMultiple: bool = Field(default=False, description="是否是多值字段")
 
 class TaskConfig(BaseModel):
     """任务配置模型"""
@@ -75,7 +76,12 @@ class TaskConfig(BaseModel):
 
     def get_beMarked(self) -> List[Dict[str, Any]]:
         """获取待标注的字段配置列表"""
-        return [{"key": field.key, "type": field.type} for field in self.fields]
+        return [{
+            "key": field.key,
+            "type": field.type,
+            "isMultiple": field.isMultiple,
+            "paths": field.paths
+        } for field in self.fields]
 
     def set_default_template(self) -> List[Dict[str, Any]]:
         """加载默认模板"""
@@ -89,9 +95,9 @@ class TaskConfig(BaseModel):
             self.fields = [FieldConfig(**item) for item in template]
         return self
 
-    def find_key_path(self, data: Any, key: str, current_path: str = "") -> Optional[str]:
+    def find_key_paths(self, data: Any, key: str, current_path: str = "") -> List[str]:
         """
-        递归查找 key 在 JSON 数据中的路径
+        递归查找 key 在 JSON 数据中的所有路径
 
         Args:
             data: JSON 数据
@@ -99,32 +105,30 @@ class TaskConfig(BaseModel):
             current_path: 当前路径
 
         Returns:
-            str: key 的路径，如果找不到则返回 None
+            List[str]: key 的所有路径列表
         """
+        paths = []
         if isinstance(data, dict):
             for k, v in data.items():
                 new_path = f"{current_path}.{k}" if current_path else k
                 if k == key:
-                    return new_path
-                found_path = self.find_key_path(v, key, new_path)
-                if found_path:
-                    return found_path
+                    paths.append(new_path)
+                paths.extend(self.find_key_paths(v, key, new_path))
         elif isinstance(data, list):
             for i, item in enumerate(data):
                 new_path = f"{current_path}[{i}]"
-                found_path = self.find_key_path(item, key, new_path)
-                if found_path:
-                    return found_path
-        return None
+                paths.extend(self.find_key_paths(item, key, new_path))
+        return paths
 
     def update_field_paths(self, json_data: Dict[str, Any]) -> None:
         """
-        更新所有 FieldConfig 的 path 字段，根据其在 JSON 数据中的实际路径
+        更新所有 FieldConfig 的 paths 字段，根据其在 JSON 数据中的所有可能路径
 
         Args:
             json_data: JSON 数据
         """
         for field in self.fields:
-            path = self.find_key_path(json_data, field.key)
-            if path:
-                field.path = path
+            paths = self.find_key_paths(json_data, field.key)
+            if paths:
+                field.paths = paths
+                field.isMultiple = len(paths) > 1
