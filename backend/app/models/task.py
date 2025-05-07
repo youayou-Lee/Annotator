@@ -37,15 +37,19 @@ class Task(BaseModel):
         """初始化所有文书信息"""
         self.documents = []
         for file_path in self.files_path:
-            file_path = os.path.join("data", "raw", "upload", file_path)  # 拼接文件路径
+            file_path = os.path.join("data", "upload", file_path)  # 拼接文件路径
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                    if isinstance(data, dict):
+                        # 如果是单个文档，转换为列表
+                        data = [data]
                     for item in data:
                         document = Document(**item)
                         self.documents.append(document)
             except Exception as e:
-                print(f"Error reading file {file_path}: {e}")
+                # 将print改为raise
+                raise ValueError(f"读取文件 {file_path} 失败: {str(e)}")
         return self.documents
 
     def __init__(self,**data):

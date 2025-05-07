@@ -44,9 +44,8 @@ def get_default_format_template(
 ):
     """获取格式化模板"""
     try:
-        print("获取默认格式化模板...",format_service.get_default_template())  # 添加日志
-        return format_service.get_default_template()
-
+        templates = format_service.get_default_template()
+        return {"templates": templates}  # 修改返回格式为包含 templates 键的字典
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"无法读取默认模板: {str(e)}")
 
@@ -92,18 +91,19 @@ async def process_jsonl_file(
     format_service: FormatService = Depends(get_format_service)
 ):
     """处理JSONL文件，根据模板进行格式化"""
-    # try:
-    result = await format_service.process_file(jsonl_file, template_file)
-    return {
-        "success": True,
-        "message": "文件处理成功",
-        "document_count": result["document_count"],
-        "success_count": result["success_count"],
-        "error_count": result["error_count"],
-        "output_path": result["output_path"]
-    }
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=str(e))
+    try:
+        result = await format_service.process_file(jsonl_file, template_file)
+        return {
+            "success": True,
+            "message": "文件处理成功",
+            "document_count": result["document_count"],
+            "success_count": result["success_count"],
+            "error_count": result["error_count"],
+            "output_path": result["output_path"]
+        }
+    except Exception as e:
+        print(f"处理JSONL文件失败: {str(e)}")  # 添加日志输出
+        raise HTTPException(status_code=500, detail=str(e))
 
 # 文件上传
 @router.post("/upload")
@@ -292,20 +292,25 @@ async def create_task(
     task_data: Dict[str, Any],
     task_service: TaskService = Depends(get_task_service)
 ):
-    # try:
+    try:
         # 创建任务
-    task = task_service.create_task(task_data)
-    
-    # 保存任务
-    task_dir = task_service.save_task(task)
-    
-    return {
-        "task_id": task.id,
-        "task_dir": task_dir,
-        "document_count": len(task.document_ids)
-    }
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=str(e))
+        task = task_service.create_task(task_data)
+        
+        # 保存任务
+        task_dir = task_service.save_task(task)
+        
+        return {
+            "task_id": task.id,
+            "task_dir": task_dir,
+            "document_count": len(task.document_ids)
+        }
+    except ValueError as ve:
+        # 处理业务逻辑错误（如格式校验失败）
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        # 处理其他未预期的错误
+        print(f"创建任务时出错: {str(e)}")  # 添加日志输出
+        raise HTTPException(status_code=500, detail=f"创建任务失败: {str(e)}")
 
 # 保存标注结果
 @router.post("/tasks/{task_id}/annotations/{document_id}")
@@ -315,13 +320,14 @@ async def save_annotation(
     annotation: Dict[str, Any],
     annotator_service: AnnotatorService = Depends(get_annotator_service)
 ):
-    # try:
-    success = annotator_service.save_annotation(task_id, document_id, annotation)
-    if not success:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return {"status": "success"}
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=str(e))
+    try:
+        success = annotator_service.save_annotation(task_id, document_id, annotation)
+        if not success:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return {"status": "success"}
+    except Exception as e:
+        print(f"保存标注结果失败: {str(e)}")  # 添加日志输出
+        raise HTTPException(status_code=500, detail=str(e))
 
 # 获取标注结果
 @router.get("/tasks/{task_id}/annotations/{document_id}")
@@ -425,24 +431,25 @@ async def check_training_status(
 async def get_tasks(
     task_service: TaskService = Depends(get_task_service)
 ):
-    # try:
-    tasks = task_service.get_all_tasks()
-    return {
-        "tasks": [
-            {
-                "id": task.id,
-                "name": task.name,
-                "description": task.description,
-                "status": task.status,
-                "created_at": task.created_at.isoformat(),
-                "updated_at": task.updated_at.isoformat(),
-                "document_count": len(task.document_ids)
-            }
-            for task in tasks
-        ]
-    }
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=str(e))
+    try:
+        tasks = task_service.get_all_tasks()
+        return {
+            "tasks": [
+                {
+                    "id": task.id,
+                    "name": task.name,
+                    "description": task.description,
+                    "status": task.status,
+                    "created_at": task.created_at.isoformat(),
+                    "updated_at": task.updated_at.isoformat(),
+                    "document_count": len(task.document_ids)
+                }
+                for task in tasks
+            ]
+        }
+    except Exception as e:
+        print(f"获取任务列表失败: {str(e)}")  # 添加日志输出
+        raise HTTPException(status_code=500, detail=str(e))
 
 # 删除任务
 @router.delete("/tasks/{task_id}")
@@ -464,13 +471,14 @@ async def get_task_documents(
     task_id: str,
     task_service: TaskService = Depends(get_task_service)
 ):
-    # try:
-    documents = task_service.get_task_documents(task_id)
-    return {
-        "documents": documents
-    }
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=str(e))
+    try:
+        documents = task_service.get_task_documents(task_id)
+        return {
+            "documents": documents
+        }
+    except Exception as e:
+        print(f"获取任务文档列表失败: {str(e)}")  # 添加日志输出
+        raise HTTPException(status_code=500, detail=str(e))
 
 # 获取任务单个文档
 @router.get("/tasks/{task_id}/documents/{document_id}")

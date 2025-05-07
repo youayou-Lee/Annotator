@@ -251,26 +251,13 @@
         </el-form-item>
         
         <el-form-item v-if="!createTaskForm.useCustomConfig" label="任务模板">
-          <el-select v-model="createTaskForm.template" placeholder="请选择任务模板">
-            <el-option
-              v-for="template in availableTemplates"
-              :key="template"
-              :label="template"
-              :value="template"
-            />
-          </el-select>
-          
-          <!-- 添加模板预览区域 -->
-          <div v-if="selectedTemplateContent" class="template-preview">
-            <el-card class="template-preview-card">
-              <template #header>
-                <div class="card-header">
-                  <span>模板预览</span>
-                </div>
-              </template>
-              <pre class="json-preview">{{ selectedTemplateContent }}</pre>
-            </el-card>
-          </div>
+          <TemplateSelector
+            type="task"
+            v-model:template="createTaskForm.template"
+            :showTabs="false"
+            :allowCustom="false"
+            placeholder="请选择任务模板"
+          />
         </el-form-item>
         
         <el-form-item v-if="createTaskForm.useCustomConfig" label="可标注字段">
@@ -315,32 +302,18 @@
         </el-form-item>
         
         <el-form-item label="格式化模板">
-          <el-radio-group v-model="createTaskForm.useFormatTemplate" class="format-template-radio">
-            <el-radio :label="false">选择已有模板</el-radio>
-            <el-radio :label="true">上传新模板</el-radio>
-          </el-radio-group>
-          
-          <div v-if="!createTaskForm.useFormatTemplate" style="margin-top: 10px;">
-            <el-select v-model="createTaskForm.formatTemplate" placeholder="请选择格式化模板">
-              <el-option
-                v-for="template in availableFormatTemplates"
-                :key="template"
-                :label="template"
-                :value="template"
-              />
-            </el-select>
-          </div>
-          
-          <div v-else style="margin-top: 10px;">
-            <FileUploader
-              v-model:fileList="createTaskForm.uploadedFormatTemplate"
-              :accept="'.py'"
-              :maxSize="1"
-              :tipText="'支持上传 Python (.py) 格式的模板文件'"
-              @file-selected="handleFormatTemplateUpload"
-              @file-removed="handleFormatTemplateRemove"
-            />
-          </div>
+          <TemplateSelector
+            type="format"
+            v-model:template="createTaskForm.formatTemplate"
+            v-model:customFile="createTaskForm.uploadedFormatTemplate[0]"
+            :showTabs="true"
+            :allowCustom="true"
+            :showPreview="true"
+            placeholder="请选择格式化模板"
+            :uploadTipText="'支持上传 Python (.py) 格式的模板文件'"
+            @file-selected="handleFormatTemplateUpload"
+            @file-removed="handleFormatTemplateRemove"
+          />
         </el-form-item>
 
         <el-form-item label="数据文件" required>
@@ -361,6 +334,29 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 格式校验错误对话框 -->
+    <el-dialog
+      v-model="validationErrorDialogVisible"
+      title="格式校验错误"
+      width="50%"
+      destroy-on-close
+    >
+      <div class="validation-error-content">
+        <el-alert
+          type="error"
+          :closable="false"
+          show-icon
+        >
+          <p class="error-message" v-html="validationErrorMessage"></p>
+        </el-alert>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="validationErrorDialogVisible = false">关闭</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -378,6 +374,7 @@ import {
 } from '@element-plus/icons-vue'
 import FormatUploader from '../components/FormatUploader.vue'
 import FileUploader from '../components/FileUploader.vue'
+import TemplateSelector from '../components/TemplateSelector.vue'
 
 const router = useRouter()
 
@@ -452,6 +449,31 @@ watch(() => createTaskForm.value.template, (newTemplate) => {
   } else {
     selectedTemplateContent.value = ''
     templatePreviewVisible.value = false
+  }
+})
+
+// 添加格式化模板预览状态和方法
+const formatTemplateContent = ref('')
+const formatTemplatePreviewVisible = ref(false)
+
+// 查看格式化模板内容的方法
+const handleFormatTemplatePreview = async (template: string) => {
+  try {
+    const response = await axios.get(`/api/format/template/${template}/content`)
+    formatTemplateContent.value = response.data.content.replace(/\\n/g, '\n')
+    formatTemplatePreviewVisible.value = true
+  } catch (error) {
+    ElMessage.error('加载格式化模板内容失败')
+  }
+}
+
+// 监听格式化模板选择变化
+watch(() => createTaskForm.value.formatTemplate, (newTemplate) => {
+  if (newTemplate) {
+    handleFormatTemplatePreview(newTemplate)
+  } else {
+    formatTemplateContent.value = ''
+    formatTemplatePreviewVisible.value = false
   }
 })
 
@@ -603,6 +625,10 @@ const handleFormatTemplateRemove = (file: File) => {
   createTaskForm.value.formatTemplateFile = null
 }
 
+// 添加验证错误状态
+const validationErrorDialogVisible = ref(false)
+const validationErrorMessage = ref('')
+
 const createTask = async () => {
   try {
     if (!createTaskForm.value.files || createTaskForm.value.files.length === 0) {
@@ -617,14 +643,10 @@ const createTask = async () => {
     }
 
     // 处理格式化模板
-    if (createTaskForm.value.useFormatTemplate) {
-      if (!createTaskForm.value.formatTemplateFile) {
-        ElMessage.warning('请上传格式化模板文件')
-        return
-      }
-      taskData.formatTemplate = createTaskForm.value.formatTemplateFile
-    } else if (createTaskForm.value.formatTemplate) {
-      taskData.formatTemplate = createTaskForm.value.formatTemplate
+    if (createTaskForm.value.formatTemplate) {
+      taskData.format_template = createTaskForm.value.formatTemplate
+    } else if (createTaskForm.value.formatTemplateFile) {
+      taskData.format_template = createTaskForm.value.formatTemplateFile
     }
 
     // 根据选择添加配置或模板
@@ -647,7 +669,25 @@ const createTask = async () => {
     createTaskDialogVisible.value = false
     loadTasks()
   } catch (error) {
-    ElMessage.error('任务创建失败: ' + (error.response?.data?.detail || error.message))
+    console.error('创建任务失败:', error)
+    
+    if (error.response?.data?.detail) {
+      // 检查是否包含格式校验错误信息
+      if (error.response.data.detail.includes('格式校验失败')) {
+        // 将错误信息格式化为HTML
+        validationErrorMessage.value = error.response.data.detail
+          .split('\n')
+          .map(line => `<div>${line}</div>`)
+          .join('')
+        
+        // 显示错误对话框
+        validationErrorDialogVisible.value = true
+      } else {
+        ElMessage.error(error.response.data.detail)
+      }
+    } else {
+      ElMessage.error('任务创建失败: ' + error.message)
+    }
   }
 }
 
@@ -793,5 +833,21 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.validation-error-content {
+  max-height: 400px;
+  overflow-y: auto;
+  
+  .error-message {
+    white-space: pre-wrap;
+    font-family: monospace;
+    margin: 0;
+    
+    :deep(div) {
+      margin: 8px 0;
+      line-height: 1.5;
+    }
+  }
 }
 </style>
