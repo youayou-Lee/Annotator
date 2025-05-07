@@ -50,6 +50,41 @@ def get_default_format_template(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"无法读取默认模板: {str(e)}")
 
+@router.get("/format/template/{template_name}/content")
+async def get_format_template_content(
+    template_name: str,
+    format_service: FormatService = Depends(get_format_service)
+):
+    """获取指定格式化模板的内容"""
+    try:
+        # 构建模板文件路径
+        template_path = os.path.join("data", "format_templates", template_name)
+        
+        # 检查文件是否存在
+        if not os.path.exists(template_path):
+            raise HTTPException(
+                status_code=404,
+                detail=f"模板文件 {template_name} 不存在"
+            )
+            
+        # 读取模板文件内容
+        with open(template_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        return {
+            "name": template_name,
+            "content": content,
+            "type": "python"
+        }
+            
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"读取模板内容失败: {str(e)}"
+        )
+
 @router.post("/format/process")
 async def process_jsonl_file(
     jsonl_file: UploadFile = File(...),
@@ -127,6 +162,76 @@ async def get_available_templates(
         return {"templates": templates}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# 获取可用的格式化模板列表
+@router.get("/format_templates")
+async def get_available_format_templates():
+    """获取可用的格式化模板列表"""
+    try:
+        templates_dir = os.path.join("data", "format_templates")
+        templates = []
+        if (os.path.exists(templates_dir)):
+            for filename in os.listdir(templates_dir):
+                if filename.endswith('.py'):
+                    templates.append(filename)
+        return {"templates": templates}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 格式化模板上传
+@router.post("/upload_format_template")
+async def upload_format_template(
+    file: UploadFile = File(...),
+    file_service: FileService = Depends(get_file_service)
+):
+    try:
+        print(f"开始处理格式化模板上传: {file.filename}")
+        
+        # 检查文件类型
+        if not file.filename.endswith('.py'):
+            raise HTTPException(
+                status_code=400,
+                detail="只支持上传 Python (.py) 格式的模板文件"
+            )
+        
+        # 检查文件大小（限制为1MB）
+        content = await file.read()
+        if len(content) > 1024 * 1024:
+            raise HTTPException(
+                status_code=400,
+                detail="模板文件大小不能超过1MB"
+            )
+        
+        # 验证Python语法
+        try:
+            compile(content.decode('utf-8'), file.filename, 'exec')
+        except SyntaxError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Python语法错误: {str(e)}"
+            )
+        
+        # 保存模板文件到格式化模板目录
+        templates_dir = os.path.join("data", "format_templates")
+        os.makedirs(templates_dir, exist_ok=True)
+        
+        file_path = os.path.join(templates_dir, file.filename)
+        with open(file_path, 'wb') as f:
+            f.write(content)
+        
+        return {
+            "code": 200,
+            "message": "格式化模板上传成功",
+            "filename": file.filename
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"上传格式化模板时出错: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"上传格式化模板时出错: {str(e)}"
+        )
 
 # 文档过滤
 @router.post("/filter")

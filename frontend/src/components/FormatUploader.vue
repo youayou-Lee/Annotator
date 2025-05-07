@@ -47,7 +47,7 @@
               <div v-if="selectedTemplate && defaultTemplate" class="template-preview">
                 <el-collapse>
                   <el-collapse-item title="查看模板结构" name="1">
-                    <pre>{{ JSON.stringify(defaultTemplate, null, 2) }}</pre>
+                    <pre class="code-preview">{{ defaultTemplate }}</pre>
                   </el-collapse-item>
                 </el-collapse>
               </div>
@@ -116,7 +116,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   InfoFilled
@@ -144,6 +144,15 @@ const canProcess = computed(() => {
   return true
 })
 
+// 监听选中模板的变化 -- 在这里添加 watch
+watch(selectedTemplate, (newTemplateId) => {
+  if (newTemplateId) {
+    loadDefaultTemplate(newTemplateId)
+  } else {
+    defaultTemplate.value = null
+  }
+})
+
 // 加载系统预设模板列表
 const loadSystemTemplates = async () => {
   try {
@@ -161,13 +170,15 @@ const loadSystemTemplates = async () => {
 }
 
 // 加载默认模板
-const loadDefaultTemplate = async () => {
+const loadDefaultTemplate = async (templateName: string) => {
+  if (!templateName) return
+  
   try {
-    const response = await axios.get('/api/format/template')
-    defaultTemplate.value = response.data
+    const response = await axios.get(`/api/format/template/${templateName}/content`)
+    defaultTemplate.value = response.data.content.replace(/\\n/g, '\n')
   } catch (error) {
-    console.error('加载默认模板失败:', error)
-    ElMessage.error('加载默认模板失败')
+    console.error('加载模板内容失败:', error)
+    ElMessage.error('加载模板内容失败')
   }
 }
 
@@ -252,7 +263,6 @@ const processFiles = async () => {
 // 组件挂载时加载模板
 onMounted(() => {
   loadSystemTemplates()
-  loadDefaultTemplate()
 })
 </script>
 
@@ -307,4 +317,21 @@ onMounted(() => {
 .stat-item {
   text-align: center;
 }
+
+.code-preview {
+  padding: 16px;
+  margin: 0;
+  white-space: pre;
+  overflow-x: auto;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  color: #333;
+}
+
 </style>
+
+
+
