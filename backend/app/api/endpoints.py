@@ -163,6 +163,19 @@ async def get_available_templates(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/templates/{template_name}/content")
+async def get_template_content(template_name: str):
+    """获取指定模板的内容"""
+    try:
+        template_path = f"data/task_templates/{template_name}"
+        with open(template_path, "r", encoding="utf-8") as f:
+            content = json.load(f)
+        return content
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="模板文件不存在")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="模板文件格式错误")
+
 # 获取可用的格式化模板列表
 @router.get("/format_templates")
 async def get_available_format_templates():

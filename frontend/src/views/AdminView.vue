@@ -233,6 +233,7 @@
         <el-form-item label="任务名称" required>
           <el-input v-model="createTaskForm.name" placeholder="请输入任务名称" />
         </el-form-item>
+        
         <el-form-item label="任务描述" required>
           <el-input
             v-model="createTaskForm.description"
@@ -241,7 +242,38 @@
             placeholder="请输入任务描述"
           />
         </el-form-item>
-        <el-form-item label="可标注字段" required>
+
+        <el-form-item label="标注配置" required>
+          <el-radio-group v-model="createTaskForm.useCustomConfig">
+            <el-radio :label="false">使用任务模板</el-radio>
+            <el-radio :label="true">自定义标注字段</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        
+        <el-form-item v-if="!createTaskForm.useCustomConfig" label="任务模板">
+          <el-select v-model="createTaskForm.template" placeholder="请选择任务模板">
+            <el-option
+              v-for="template in availableTemplates"
+              :key="template"
+              :label="template"
+              :value="template"
+            />
+          </el-select>
+          
+          <!-- 添加模板预览区域 -->
+          <div v-if="selectedTemplateContent" class="template-preview">
+            <el-card class="template-preview-card">
+              <template #header>
+                <div class="card-header">
+                  <span>模板预览</span>
+                </div>
+              </template>
+              <pre class="json-preview">{{ selectedTemplateContent }}</pre>
+            </el-card>
+          </div>
+        </el-form-item>
+        
+        <el-form-item v-if="createTaskForm.useCustomConfig" label="可标注字段">
           <el-table :data="createTaskForm.config" style="width: 100%">
             <el-table-column label="字段路径">
               <template #default="{ row }">
@@ -281,6 +313,36 @@
             <el-button type="primary" @click="addField">添加字段</el-button>
           </div>
         </el-form-item>
+        
+        <el-form-item label="格式化模板">
+          <el-radio-group v-model="createTaskForm.useFormatTemplate" class="format-template-radio">
+            <el-radio :label="false">选择已有模板</el-radio>
+            <el-radio :label="true">上传新模板</el-radio>
+          </el-radio-group>
+          
+          <div v-if="!createTaskForm.useFormatTemplate" style="margin-top: 10px;">
+            <el-select v-model="createTaskForm.formatTemplate" placeholder="请选择格式化模板">
+              <el-option
+                v-for="template in availableFormatTemplates"
+                :key="template"
+                :label="template"
+                :value="template"
+              />
+            </el-select>
+          </div>
+          
+          <div v-else style="margin-top: 10px;">
+            <FileUploader
+              v-model:fileList="createTaskForm.uploadedFormatTemplate"
+              :accept="'.py'"
+              :maxSize="1"
+              :tipText="'支持上传 Python (.py) 格式的模板文件'"
+              @file-selected="handleFormatTemplateUpload"
+              @file-removed="handleFormatTemplateRemove"
+            />
+          </div>
+        </el-form-item>
+
         <el-form-item label="数据文件" required>
           <FileUploader
             v-model:fileList="createTaskForm.uploadedFiles"
@@ -290,16 +352,6 @@
             @file-selected="handleUploadSuccess"
             @file-removed="handleUploadRemoved"
           />
-        </el-form-item>
-        <el-form-item label="任务模板">
-          <el-select v-model="createTaskForm.template" placeholder="请选择任务模板">
-            <el-option
-              v-for="template in availableTemplates"
-              :key="template"
-              :label="template"
-              :value="template"
-            />
-          </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -313,7 +365,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
@@ -334,6 +386,7 @@ const activeMenu = ref('filter')
 const tasks = ref([])
 const availableFiles = ref([])
 const availableTemplates = ref([])
+const availableFormatTemplates = ref([])
 const defaultAnnotationFields = ref(['是否缓刑', '罚金', '法定刑区间', '与宣告刑是否一致'])
 
 // 表单数据
@@ -367,9 +420,39 @@ const createTaskForm = ref({
   name: '',
   description: '',
   data_file: null,
-  template: 'template_default.json',
-  config: [],
-  uploadedFiles: [] // 新增用于 FileUploader 的文件列表
+  template: '',
+  config: [], // 自定义可标注字段
+  uploadedFiles: [], // 用于数据文件的文件列表
+  files: [], // 存储多个数据文件名
+  useCustomConfig: false, // 是否使用自定义标注字段
+  formatTemplate: '', // 选择的格式化模板名称
+  uploadedFormatTemplate: [], // 用于格式化模板的文件列表
+  formatTemplateFile: null // 存储格式化模板文件名
+})
+
+// 添加模板预览状态
+const selectedTemplateContent = ref('')
+const templatePreviewVisible = ref(false)
+
+// 查看模板内容的方法
+const handleTemplatePreview = async (template: string) => {
+  try {
+    const response = await axios.get(`/api/templates/${template}/content`)
+    selectedTemplateContent.value = JSON.stringify(response.data, null, 2)
+    templatePreviewVisible.value = true
+  } catch (error) {
+    ElMessage.error('加载模板内容失败')
+  }
+}
+
+// 监听模板选择变化
+watch(() => createTaskForm.value.template, (newTemplate) => {
+  if (newTemplate) {
+    handleTemplatePreview(newTemplate)
+  } else {
+    selectedTemplateContent.value = ''
+    templatePreviewVisible.value = false
+  }
 })
 
 // 方法
@@ -392,6 +475,15 @@ const loadAvailableTemplates = async () => {
     availableTemplates.value = response.data.templates
   } catch (error) {
     ElMessage.error('加载模板列表失败')
+  }
+}
+
+const loadFormatTemplates = async () => {
+  try {
+    const response = await axios.get('/api/format_templates')
+    availableFormatTemplates.value = response.data.templates
+  } catch (error) {
+    ElMessage.error('加载格式化模板列表失败')
   }
 }
 
@@ -458,7 +550,11 @@ const handleUploadSuccess = async (file: File) => {
     })
     
     if (response.data.code === 200) {
-      createTaskForm.value.data_file = response.data.filename
+      // 将文件名添加到已上传文件列表中
+      if (!createTaskForm.value.files) {
+        createTaskForm.value.files = []
+      }
+      createTaskForm.value.files.push(response.data.filename)
       ElMessage.success('文件上传成功')
     } else {
       ElMessage.error('文件上传失败')
@@ -469,14 +565,47 @@ const handleUploadSuccess = async (file: File) => {
   }
 }
 
-const handleUploadRemoved = () => {
-  console.log('文件已移除')
-  createTaskForm.value.data_file = null
+const handleUploadRemoved = (file: File) => {
+  if (createTaskForm.value.files) {
+    const index = createTaskForm.value.files.indexOf(file.name)
+    if (index > -1) {
+      createTaskForm.value.files.splice(index, 1)
+    }
+  }
+}
+
+// 处理格式化模板文件上传成功
+const handleFormatTemplateUpload = async (file: File) => {
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const response = await axios.post('/api/upload_format_template', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    
+    if (response.data.code === 200) {
+      createTaskForm.value.formatTemplateFile = response.data.filename
+      ElMessage.success('格式化模板上传成功')
+    } else {
+      ElMessage.error('格式化模板上传失败')
+    }
+  } catch (error) {
+    console.error('格式化模板上传失败:', error)
+    ElMessage.error('格式化模板上传失败: ' + (error.response?.data?.detail || error.message))
+  }
+}
+
+// 处理格式化模板文件移除
+const handleFormatTemplateRemove = (file: File) => {
+  createTaskForm.value.formatTemplateFile = null
 }
 
 const createTask = async () => {
   try {
-    if (!createTaskForm.value.data_file) {
+    if (!createTaskForm.value.files || createTaskForm.value.files.length === 0) {
       ElMessage.warning('请先上传数据文件')
       return
     }
@@ -484,9 +613,33 @@ const createTask = async () => {
     const taskData = {
       name: createTaskForm.value.name,
       description: createTaskForm.value.description,
-      data_file: createTaskForm.value.data_file,
-      template: createTaskForm.value.template || 'template_default.json',
-      config: createTaskForm.value.config
+      files: createTaskForm.value.files
+    }
+
+    // 处理格式化模板
+    if (createTaskForm.value.useFormatTemplate) {
+      if (!createTaskForm.value.formatTemplateFile) {
+        ElMessage.warning('请上传格式化模板文件')
+        return
+      }
+      taskData.formatTemplate = createTaskForm.value.formatTemplateFile
+    } else if (createTaskForm.value.formatTemplate) {
+      taskData.formatTemplate = createTaskForm.value.formatTemplate
+    }
+
+    // 根据选择添加配置或模板
+    if (createTaskForm.value.useCustomConfig) {
+      if (!createTaskForm.value.config.length) {
+        ElMessage.warning('请添加至少一个可标注字段')
+        return
+      }
+      taskData.config = createTaskForm.value.config
+    } else {
+      if (!createTaskForm.value.template) {
+        ElMessage.warning('请选择任务模板')
+        return
+      }
+      taskData.template = createTaskForm.value.template
     }
     
     const response = await axios.post('/api/create_Tasks', taskData)
@@ -585,6 +738,7 @@ onMounted(() => {
   loadTasks()
   loadAvailableFiles()
   loadAvailableTemplates()
+  loadFormatTemplates() // 添加加载格式化模板
 })
 </script>
 
@@ -607,6 +761,25 @@ onMounted(() => {
       display: flex;
       justify-content: space-between;
       align-items: center;
+    }
+  }
+}
+
+.template-preview {
+  margin-top: 15px;
+  
+  .template-preview-card {
+    background-color: #f8f9fa;
+    
+    .json-preview {
+      margin: 0;
+      padding: 10px;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      max-height: 300px;
+      overflow-y: auto;
     }
   }
 }
