@@ -11,10 +11,11 @@ app = FastAPI(
 # 配置CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 在生产环境中应该设置具体的源
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]  # 允许前端访问响应头
 )
 
 # 注册路由
@@ -22,4 +23,4 @@ app.include_router(router, prefix="/api")
 
 @app.get("/")
 async def root():
-    return {"message": "欢迎使用文书标注系统"} 
+    return {"message": "欢迎使用文书标注系统"}

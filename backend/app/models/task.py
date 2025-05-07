@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from datetime import datetime
 import enum, os, json
 from .document import Document
@@ -37,15 +37,19 @@ class Task(BaseModel):
         """初始化所有文书信息"""
         self.documents = []
         for file_path in self.files_path:
-            file_path = os.path.join("data", "raw", "upload", file_path)  # 拼接文件路径
+            file_path = os.path.join("data", "upload", file_path)  # 拼接文件路径
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                    if isinstance(data, dict):
+                        # 如果是单个文档，转换为列表
+                        data = [data]
                     for item in data:
                         document = Document(**item)
                         self.documents.append(document)
             except Exception as e:
-                print(f"Error reading file {file_path}: {e}")
+                # 将print改为raise
+                raise ValueError(f"读取文件 {file_path} 失败: {str(e)}")
         return self.documents
 
     def __init__(self,**data):
@@ -57,30 +61,28 @@ class Task(BaseModel):
 
 class FieldConfig(BaseModel):
     """字段配置模型"""
-    name: str = Field(..., description="字段名称")
+    key: str = Field(..., description="字段名称")
     type: str = Field(..., description="字段类型", pattern="^(string|boolean|number|array)$")
     # path: str = Field(..., description="字段在文档中的路径")
     description: str = Field(default="", description="字段描述")
 
 class TaskConfig(BaseModel):
     """任务配置模型"""
-    fields: List[FieldConfig] = Field(..., description="待标注的字段配置")
+    fields: List[FieldConfig] = Field(default_factory=list, description="待标注的字段配置")
 
     def get_beMarked(self) -> List[Dict[str, Any]]:
         """获取待标注的字段配置列表"""
-        return [{"path": field.path, "type": field.type} for field in self.fields]
+        return [{"key": field.key, "type": field.type} for field in self.fields]
 
-    def set_default_template(self) -> Dict[str, Any]:
-        """获取默认模板"""
-        with open("backend/app/config/template.json", "r", encoding="utf-8") as f:
-            template = json.load(f)["need_be_marked_list"]
-        
-        for item in template:
-            self.fields.append(FieldConfig(**item))
+    def set_default_template(self) -> List[Dict[str, Any]]:
+        """加载默认模板"""
+        with open("data/task_templates/template.json", "r", encoding="utf-8") as f:
+            return json.load(f)["need_be_marked_list"]
 
-    def __init__(self, **data):
-        super().__init__(**data)
-        # 初始化后自动调用set_default_template
+    @model_validator(mode="after")
+    def set_default_fields(self) -> "TaskConfig":
         if not self.fields:
-            self.set_default_template()
+            template = self.set_default_template()
+            self.fields = [FieldConfig(**item) for item in template]
+        return self
 

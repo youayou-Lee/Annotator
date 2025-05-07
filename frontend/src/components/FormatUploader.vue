@@ -26,44 +26,12 @@
 
         <!-- 模板选择区域 -->
         <el-form-item label="步骤 2: 选择格式化模板">
-          <el-tabs v-model="templateMode" class="template-tabs">
-            <el-tab-pane label="系统模板" name="system">
-              <el-select 
-                v-model="selectedTemplate" 
-                placeholder="请选择系统预设模板"
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="template in systemTemplates"
-                  :key="template.name"
-                  :label="template.name"
-                  :value="template.id"
-                >
-                  <span>{{ template.name }}</span>
-                  <small style="color: #8c8c8c; margin-left: 8px">{{ template.description }}</small>
-                </el-option>
-              </el-select>
-              <div v-if="selectedTemplate && defaultTemplate" class="template-preview">
-                <el-collapse>
-                  <el-collapse-item title="查看模板结构" name="1">
-                    <pre>{{ JSON.stringify(defaultTemplate, null, 2) }}</pre>
-                  </el-collapse-item>
-                </el-collapse>
-              </div>
-            </el-tab-pane>
-            
-            <el-tab-pane label="自定义模板" name="custom">
-              <FileUploader
-                v-model:fileList="customTemplate"
-                :accept="'.json'"
-                :maxSize="1"
-                :tipText="'请上传 JSON 格式的模板文件'"
-                :fileValidation="validateTemplateFile"
-                @file-selected="handleTemplateSelected"
-                @file-removed="handleTemplateRemoved"
-              />
-            </el-tab-pane>
-          </el-tabs>
+          <TemplateSelector
+            type="format"
+            v-model:template="selectedTemplate"
+            v-model:customFile="customTemplateFile"
+            :uploadTipText="'请上传 py 格式的模板文件'"
+          />
         </el-form-item>
 
         <!-- 处理按钮 -->
@@ -115,60 +83,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import {
-  InfoFilled
-} from '@element-plus/icons-vue'
+import { InfoFilled } from '@element-plus/icons-vue'
 import axios from 'axios'
 import FileUploader from './FileUploader.vue'
+import TemplateSelector from './TemplateSelector.vue'
 
 // 状态定义
 const uploadedFile = ref<any[]>([])
-const customTemplate = ref<any[]>([])
-const templateMode = ref('system')
 const selectedTemplate = ref('')
-const defaultTemplate = ref(null)
+const customTemplateFile = ref(null)
 const processResult = ref(null)
 const processing = ref(false)
-const systemTemplates = ref([
-  { id: 'default', name: '默认模板', description: '系统默认的格式化模板' }
-])
 
 // 计算属性：是否可以开始处理
 const canProcess = computed(() => {
   if (!uploadedFile.value.length) return false
-  if (templateMode.value === 'system' && !selectedTemplate.value) return false
-  if (templateMode.value === 'custom' && !customTemplate.value.length) return false
+  if (!selectedTemplate.value && !customTemplateFile.value) return false
   return true
 })
-
-// 加载系统预设模板列表
-const loadSystemTemplates = async () => {
-  try {
-    const response = await axios.get('/api/format/template')
-    const templates = response.data || []
-    systemTemplates.value = templates.map((t: string) => ({
-      id: t,
-      name: t,
-      description: '系统预设模板'
-    }))
-  } catch (error) {
-    console.error('加载系统模板列表失败:', error)
-    ElMessage.error('加载系统模板列表失败')
-  }
-}
-
-// 加载默认模板
-const loadDefaultTemplate = async () => {
-  try {
-    const response = await axios.get('/api/format/template')
-    defaultTemplate.value = response.data
-  } catch (error) {
-    console.error('加载默认模板失败:', error)
-    ElMessage.error('加载默认模板失败')
-  }
-}
 
 // 文件处理函数
 const handleFileSelected = (file: File) => {
@@ -177,23 +111,6 @@ const handleFileSelected = (file: File) => {
 
 const handleFileRemoved = () => {
   console.log('移除了文件')
-}
-
-const handleTemplateSelected = (file: File) => {
-  console.log('选择了模板:', file.name)
-}
-
-const handleTemplateRemoved = () => {
-  console.log('移除了模板')
-}
-
-// 模板文件验证
-const validateTemplateFile = (file: File) => {
-  const isJson = file.name.endsWith('.py')
-  if (!isJson) {
-    return '只能上传 PY 格式文件!'
-  }
-  return true
 }
 
 // 处理文件
@@ -206,16 +123,12 @@ const processFiles = async () => {
     ElMessage.error('请选择有效的文件')
     return
   }
-
+  
   formData.append('jsonl_file', uploadedFile.value[0])
   
-  if (templateMode.value === 'custom') {
-    if (!customTemplate.value[0]) {
-      ElMessage.error('请选择有效的模板文件')
-      return
-    }
-    formData.append('template_file', customTemplate.value[0])
-  } else if (templateMode.value === 'system' && selectedTemplate.value) {
+  if (customTemplateFile.value) {
+    formData.append('template_file', customTemplateFile.value)
+  } else if (selectedTemplate.value) {
     formData.append('template_name', selectedTemplate.value)
   }
 
@@ -247,12 +160,6 @@ const processFiles = async () => {
     processing.value = false
   }
 }
-
-// 组件挂载时加载模板
-onMounted(() => {
-  loadSystemTemplates()
-  loadDefaultTemplate()
-})
 </script>
 
 <style scoped>
@@ -272,25 +179,6 @@ onMounted(() => {
   gap: 8px;
 }
 
-.template-tabs {
-  width: 100%;
-}
-
-.template-preview {
-  margin-top: 16px;
-  background-color: var(--el-bg-color-page);
-  border-radius: 4px;
-}
-
-.template-preview pre {
-  padding: 16px;
-  margin: 0;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  font-size: 12px;
-  font-family: 'Courier New', Courier, monospace;
-}
-
 .process-result {
   margin-top: 24px;
   padding-top: 24px;
@@ -307,3 +195,6 @@ onMounted(() => {
   text-align: center;
 }
 </style>
+
+
+

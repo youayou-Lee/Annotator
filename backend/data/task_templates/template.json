@@ -1,0 +1,16 @@
+{
+    "need_be_marked_list": [
+        {
+            "key": "罚金",
+            "type": "number"
+        },
+        {
+            "key": "是否缓刑",
+            "type": "boolean"
+        },
+        {
+            "key": "法定刑区间",
+            "type": "string"
+        }
+    ]
+} 

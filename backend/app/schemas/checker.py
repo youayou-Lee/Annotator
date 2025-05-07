@@ -6,24 +6,25 @@ from typing import Type, Dict, Any, List, Optional, Union
 from pydantic import BaseModel, ValidationError
 from pydantic_core import PydanticUndefined, PydanticCustomError
 class JsonChecker:
-    def __init__(self, model_file: Optional[Path] = None, default_model: Optional[Type[BaseModel]] = None):
-        """
-        初始化校验器
-        
-        :param model_file: 用户提供的Pydantic模型文件路径
-        :param default_model: 默认的Pydantic模型类（当用户未提供模型文件时使用）
-        """
+    def __init__(
+        self,
+        model_file: Optional[Path] = None,
+        default_model: Optional[Type[BaseModel]] = None,
+        model_name: Optional[str] = "Document"  # 新增：指定模型类名
+    ):
         self.model = default_model
         if model_file is not None:
-            self.model = self._load_model_from_pyfile(model_file)
+            self.model = self._load_model_from_pyfile(model_file, model_name)  # 传递 model_name
         elif default_model is None:
             raise ValueError("必须提供模型文件或默认模型")
 
-    def _load_model_from_pyfile(self, file_path: Path) -> Type[BaseModel]:
-        """从Python文件中加载Pydantic模型"""
+    def _load_model_from_pyfile(
+        self, 
+        file_path: Path, 
+        model_name: Optional[str] = None  # 新增：指定模型类名
+    ) -> Type[BaseModel]:
+        """从Python文件中加载指定名称的Pydantic模型"""
         module_name = f"user_model_{file_path.stem}"
-        
-        # 动态加载模块
         spec = importlib.util.spec_from_file_location(module_name, file_path)
         if spec is None:
             raise ImportError(f"无法从文件 {file_path} 加载模块")
@@ -36,12 +37,13 @@ class JsonChecker:
         models = []
         for name, obj in vars(module).items():
             if isinstance(obj, type) and issubclass(obj, BaseModel) and obj is not BaseModel:
-                models.append(obj)
+                if model_name is None or name == model_name:  # 未指定名称或名称匹配
+                    models.append(obj)
         
         if not models:
-            raise ValueError("Python文件中未找到有效的Pydantic模型")
+            raise ValueError(f"Python文件中未找到模型{' ' + model_name if model_name else ''}")
         
-        return models[0]
+        return models[0]  # 返回匹配的第一个模型
 
     def validate(self, json_data: Union[Dict[str, Any], List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
         """
@@ -219,3 +221,16 @@ class JsonChecker:
             return self.fill_template(data)
         else:
             raise ValueError(f"未知模式: {mode}")
+
+def formatting_verrification(json_file: Path, temp_py:Path, mode: str = 'validate') -> List[Dict[str, Any]]:
+    """
+    校验JSON/JSONL文件格式
+    
+    :param json_file: JSON/JSONL文件路径
+    :param temp_file: 模板文件路径
+    :param mode: 处理模式 ('validate' 或 'fill')
+    :return: 处理后的数据列表
+    """
+    checker = JsonChecker(model_file=Path(temp_py)) if temp_py else JsonChecker(default_model=Document)
+
+    return checker.process_file(Path(temp_jsonl), mode=mode)
