@@ -506,23 +506,31 @@ async def get_task_config(
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
             
-        # 获取模板内容
-        template_path = os.path.join(task_service.task_templates_dir, "template_default.json")
-        task_config = TaskConfig.from_template(template_path, task.config)
-            
+        # 将任务配置转换为TaskConfig对象
+        task_config = TaskConfig(fields=[{
+            "key": field["key"],
+            "type": field["type"],
+            "description": field.get("description", "")
+        } for field in task.config])
+        
+        # 获取第一个文档用于更新字段路径
+        documents = task_service.get_task_documents(task_id)
+        if documents:
+            task_config.update_field_paths(documents[0])
+        
         return {
             "status": "success",
             "config": {
                 "fields": [
                     {
-                        "path": field.path,
-                        "name": field.name,
+                        "key": field.key,
                         "type": field.type,
-                        "description": field.description
+                        "description": field.description or "",
+                        "path": field.path or field.key  # 如果没有path就用key
                     }
                     for field in task_config.fields
                 ],
-                "beMarked": [field["path"] for field in task.config]  # Add the beMarked field list
+                "beMarked": [field.key for field in task_config.fields]  # 使用key而不是path
             }
         }
     except Exception as e:

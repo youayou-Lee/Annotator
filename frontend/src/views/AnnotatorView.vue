@@ -50,34 +50,34 @@
                 >
                   <template v-if="field.type === 'number'">
                     <el-input-number
-                      v-model="field.value"
+                      :model-value="getFieldValue(currentDocument, field.key)"
+                      @update:model-value="(val) => setFieldValue(currentDocument, field.key, val)"
                       :placeholder="`请输入${field.label}`"
-                      @change="(val) => setFieldValue(currentDocument, field.key, val)"
-                      :disabled="!isFieldEditable(field.key)"
+                      :disabled="false"
                     />
                   </template>
 
                   <template v-else-if="field.type === 'boolean'">
                     <el-switch
-                      v-model="field.value"
-                      @change="(val) => setFieldValue(currentDocument, field.key, val)"
-                      :disabled="!isFieldEditable(field.key)"
+                      :model-value="getFieldValue(currentDocument, field.key)"
+                      @update:model-value="(val) => setFieldValue(currentDocument, field.key, val)"
+                      :disabled="false"
                     />
                   </template>
 
                   <template v-else-if="field.type === 'array'">
                     <el-select
-                      v-model="field.value"
+                      :model-value="getFieldValue(currentDocument, field.key)"
+                      @update:model-value="(val) => setFieldValue(currentDocument, field.key, val)"
                       multiple
                       filterable
                       allow-create
                       default-first-option
                       style="width: 100%"
-                      @change="(val) => setFieldValue(currentDocument, field.key, val)"
-                      :disabled="!isFieldEditable(field.key)"
+                      :disabled="false"
                     >
                       <el-option
-                        v-for="item in field.value"
+                        v-for="item in getFieldValue(currentDocument, field.key) || []"
                         :key="item"
                         :label="item"
                         :value="item"
@@ -87,17 +87,16 @@
 
                   <template v-else>
                     <el-input
-                      v-model="field.value"
-                      :type="field.type === 'string' && field.value?.length > 50 ? 'textarea' : 'text'"
+                      :model-value="getFieldValue(currentDocument, field.key)"
+                      @update:model-value="(val) => setFieldValue(currentDocument, field.key, val)"
+                      :type="getInputType(field.key, getFieldValue(currentDocument, field.key))"
                       :autosize="{ minRows: 2, maxRows: 4 }"
                       :placeholder="`请输入${field.label}`"
-                      @change="(val) => setFieldValue(currentDocument, field.key, val)"
-                      :disabled="!isFieldEditable(field.key)"
+                      :disabled="false"
                     />
                   </template>
                   
                   <span v-if="field.description" class="field-description">{{ field.description }}</span>
-                  <el-tag v-if="!isFieldEditable(field.key)" size="small" type="info" style="margin-left: 8px">不可编辑</el-tag>
                 </el-form-item>
               </el-form>
             </el-card>
@@ -318,70 +317,54 @@ const setFieldValue = (document: any, field: string, value: any) => {
 
 // 生成标注字段
 const generateAnnotationFields = computed(() => {
-  if (!taskConfig.value || !currentDocument.value) return []
+  if (!taskConfig.value?.fields || !currentDocument.value) return []
   
   return taskConfig.value.fields.map((field) => {
-    const value = getFieldValue(currentDocument.value, field.path)
-
-    switch (field.type) {
-      case 'boolean':
-        return {
-          key: field.path,
-          label: field.name,
-          type: 'boolean',
-          value: value === undefined ? false : value,
-          description: field.description
-        }
-      
-      case 'number':
-        return {
-          key: field.path,
-          label: field.name,
-          type: 'number',
-          value: value,
-          description: field.description
-        }
-      
-      case 'array':
-        return {
-          key: field.path,
-          label: field.name,
-          type: 'array',
-          value: value || [],
-          description: field.description
-        }
-      
-      default:
-        return {
-          key: field.path,
-          label: field.name,
-          type: 'text',
-          value: value,
-          description: field.description
-        }
+    let value = getFieldValue(currentDocument.value, field.key)
+    
+    // 根据类型设置默认值
+    if (value === undefined) {
+      switch (field.type) {
+        case 'boolean':
+          value = false
+          break
+        case 'number':
+          value = 0
+          break
+        case 'array':
+          value = []
+          break
+        default:
+          value = ''
+      }
+      // 设置初始值到文档中
+      setFieldValue(currentDocument.value, field.key, value)
+    }
+    
+    return {
+      key: field.key,
+      label: field.key, // 使用key作为显示标签
+      type: field.type,
+      value: value,
+      description: field.description
     }
   })
 })
 
 const saveAnnotation = async () => {
   try {
-    if (!currentDocument.value || !currentDocument.value.id) {
-      ElMessage.error('当前文档ID无效')
-      return
-    }
-
-    console.log('保存标注，文档ID:', currentDocument.value.id)
+    const documentId = currentDocument.value?.id || currentDocument.value?.s5
     
-    // 创建标注对象，使用完整的文档结构
-    const annotation = JSON.parse(JSON.stringify(currentDocument.value))
-    // 移除一些不需要的字段
-    delete annotation.s5
-    if (annotation.id === annotation.s5) {
-      delete annotation.id
+    // 创建标注对象，只包含任务配置中定义的字段
+    const annotation = {}
+    for (const field of taskConfig.value.fields) {
+      if (field.key in currentDocument.value) {
+        annotation[field.key] = currentDocument.value[field.key]
+      }
     }
 
     await axios.post(
-      `/api/tasks/${taskId.value}/annotations/${currentDocument.value.id}`, 
+      `/api/tasks/${taskId.value}/annotations/${documentId}`, 
       annotation
     )
 
@@ -444,15 +427,27 @@ const goBack = () => {
 const loadTaskConfig = async () => {
   try {
     const response = await axios.get(`/api/tasks/${taskId.value}/config`)
-    taskConfig.value = response.data.config
+    if (!response.data?.config?.fields) {
+      throw new Error('配置数据格式错误')
+    }
+    taskConfig.value = {
+      fields: response.data.config.fields.map(field => ({
+        key: field.key,
+        name: field.key,
+        type: field.type,
+        description: field.description || ''
+      })),
+      beMarked: response.data.config.beMarked || []
+    }
   } catch (error) {
-    ElMessage.error('加载任务配置失败')
+    console.error('加载任务配置失败:', error)
+    ElMessage.error('加载任务配置失败：' + (error.response?.data?.detail || error.message))
   }
 }
 
 // 判断字段是否可编辑
 const isFieldEditable = (field: string): boolean => {
-  return taskConfig.value.beMarked.includes(field)
+  return taskConfig.value?.beMarked?.includes(field) ?? true
 }
 
 // 获取输入框类型

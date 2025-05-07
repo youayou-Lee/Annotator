@@ -198,6 +198,20 @@ class TaskService:
     def get_task_document(self, task_id: str, document_id: str) -> Optional[Dict[str, Any]]:
         """获取任务中的单个文档"""
         try:
+            # 首先获取任务信息
+            task = self.get_task(task_id)
+            if not task:
+                raise ValueError(f"任务不存在: {task_id}")
+            
+            # 验证文档ID是否在任务的document_ids中
+            if document_id not in task.document_ids and task.documents:
+                # 如果documents列表存在，尝试从中查找文档
+                for doc in task.documents:
+                    if doc.id == document_id:
+                        return doc.dict()
+                return None
+            
+            # 从文件中获取文档
             documents = self.get_task_documents(task_id)
             for doc in documents:
                 if doc.get('id') == document_id:

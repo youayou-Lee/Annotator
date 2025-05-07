@@ -36,6 +36,7 @@ class Task(BaseModel):
     def set_all_documents(self) -> List['Document']:
         """初始化所有文书信息"""
         self.documents = []
+        self.document_ids = []  # 重置document_ids
         for file_path in self.files_path:
             file_path = os.path.join("data", "upload", file_path)  # 拼接文件路径
             try:
@@ -47,8 +48,10 @@ class Task(BaseModel):
                     for item in data:
                         document = Document(**item)
                         self.documents.append(document)
+                        # 确保document_ids包含所有文档ID
+                        if hasattr(document, 'id') and document.id:
+                            self.document_ids.append(document.id)
             except Exception as e:
-                # 将print改为raise
                 raise ValueError(f"读取文件 {file_path} 失败: {str(e)}")
         return self.documents
 
@@ -63,7 +66,7 @@ class FieldConfig(BaseModel):
     """字段配置模型"""
     key: str = Field(..., description="字段名称")
     type: str = Field(..., description="字段类型", pattern="^(string|boolean|number|array)$")
-    # path: str = Field(..., description="字段在文档中的路径")
+    path: str = Field(default="", description="字段在文档中的路径")
     description: str = Field(default="", description="字段描述")
 
 class TaskConfig(BaseModel):
@@ -86,3 +89,42 @@ class TaskConfig(BaseModel):
             self.fields = [FieldConfig(**item) for item in template]
         return self
 
+    def find_key_path(self, data: Any, key: str, current_path: str = "") -> Optional[str]:
+        """
+        递归查找 key 在 JSON 数据中的路径
+
+        Args:
+            data: JSON 数据
+            key: 要查找的 key
+            current_path: 当前路径
+
+        Returns:
+            str: key 的路径，如果找不到则返回 None
+        """
+        if isinstance(data, dict):
+            for k, v in data.items():
+                new_path = f"{current_path}.{k}" if current_path else k
+                if k == key:
+                    return new_path
+                found_path = self.find_key_path(v, key, new_path)
+                if found_path:
+                    return found_path
+        elif isinstance(data, list):
+            for i, item in enumerate(data):
+                new_path = f"{current_path}[{i}]"
+                found_path = self.find_key_path(item, key, new_path)
+                if found_path:
+                    return found_path
+        return None
+
+    def update_field_paths(self, json_data: Dict[str, Any]) -> None:
+        """
+        更新所有 FieldConfig 的 path 字段，根据其在 JSON 数据中的实际路径
+
+        Args:
+            json_data: JSON 数据
+        """
+        for field in self.fields:
+            path = self.find_key_path(json_data, field.key)
+            if path:
+                field.path = path

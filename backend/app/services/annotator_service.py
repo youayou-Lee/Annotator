@@ -65,40 +65,33 @@ class AnnotatorService:
     def save_annotation(self, task_id: str, document_id: str, annotation: Dict[str, Any]) -> bool:
         """保存标注结果"""
         try:
-            # 获取文档保存路径
+            # 创建标注目录
             doc_dir = os.path.join(self.output_dir, task_id)
             os.makedirs(doc_dir, exist_ok=True)
             
-            # 获取原始文档
-            task_docs = self._get_task_documents(task_id)
-            if not task_docs:
-                return False
-                
-            doc = next((d for d in task_docs if d.get('id') == document_id), None)
-            if not doc:
-                return False
-                
-            # 加载已有的标注（如果存在）
+            # 构建标注对象，只包含标注的字段
+            annotation_data = {}
+            
+            # 获取任务配置来确定需要标注的字段
+            task_file = os.path.join("data", "tasks", f"{task_id}.json")
+            if os.path.exists(task_file):
+                with open(task_file, 'r', encoding='utf-8') as f:
+                    task_data = json.load(f)
+                    config = task_data.get('config', [])
+                    # 从配置中获取需要标注的字段
+                    fields_to_annotate = [field['key'] for field in config]
+                    
+                    # 只保存配置中指定的标注字段
+                    for field in fields_to_annotate:
+                        if field in annotation:
+                            annotation_data[field] = annotation[field]
+            
+            # 如果是第一次保存，创建新文件
             annotation_path = os.path.join(doc_dir, f"{document_id}_annotation.json")
-            if os.path.exists(annotation_path):
-                with open(annotation_path, 'r', encoding='utf-8') as f:
-                    existing_doc = json.load(f)
-                    doc = existing_doc  # 使用已有的标注文档作为基础
-
-            # 更新文档中的字段
-            for field_name, value in annotation.items():
-                # 递归查找并更新字段
-                container, name, found = self._find_field_in_document(doc, field_name)
-                if found:
-                    # 如果找到了字段，直接更新其值
-                    container[name] = value
-                else:
-                    # 如果没有找到，作为顶层字段添加
-                    doc[field_name] = value
-
-            # 保存更新后的文档
+            
+            # 保存标注数据
             with open(annotation_path, 'w', encoding='utf-8') as f:
-                json.dump(doc, f, ensure_ascii=False, indent=2)
+                json.dump(annotation_data, f, ensure_ascii=False, indent=2)
             
             return True
             
