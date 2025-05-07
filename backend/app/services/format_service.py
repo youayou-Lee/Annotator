@@ -55,13 +55,14 @@ class FormatService:
                     f.write(template_content)
 
             # 初始化校验器
-            checker = JsonChecker(model_file=Path(temp_py)) if temp_py else JsonChecker(default_model=Document)
 
             # 处理JSONL文件
             documents = []
             success_count = 0
             error_count = 0
             error_details = []
+            
+            checker = JsonChecker(model_file=Path(temp_py)) if temp_py else JsonChecker(default_model=Document)
 
             documents.append(checker.process_file(Path(temp_jsonl), mode='fill'))
 

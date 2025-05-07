@@ -5,11 +5,12 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from ..models.task import Task, TaskConfig, Document, TaskStatus, TaskType
 from sqlalchemy.orm import Session
-
+from ..schemas import JsonChecker
+from pathlib import Path
 class TaskService:
     """任务服务"""
     
-    def __init__(self, upload_dir: str = "data/raw/upload", task_templates_dir: str = "data/task_templates"):
+    def __init__(self, upload_dir: str = "data/upload", task_templates_dir: str = "data/task_templates"):
         self.upload_dir = upload_dir
         self.task_templates_dir = os.path.abspath(task_templates_dir)
         self.tasks_dir = os.path.join("data", "tasks")  # tasks 文件夹用于存储任务配置
@@ -27,27 +28,27 @@ class TaskService:
             List[Document]: 文档列表
         """
         documents = []
-        # try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                # try:
-                content = json.loads(line.strip())
-                doc_id = content.get('s5', '')
-                if not doc_id:
-                    print(f"警告: 文档缺少s5字段: {content}")
-                    continue
-                    
-                doc = Document(
-                    id=doc_id,
-                    content=content,
-                    source_file=os.path.basename(file_path)
-                )
-                documents.append(doc)
-                # except json.JSONDecodeError:
-                #     print(f"警告: 无效的JSON行: {line}")
-                #     continue
-        # except Exception as e:
-        #     raise Exception(f"读取JSONL文件失败: {str(e)}")
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    try:
+                        content = json.loads(line.strip())
+                        doc_id = content.get('s5', '')
+                        if not doc_id:
+                            print(f"警告: 文档缺少s5字段: {content}")
+                            continue
+                            
+                        doc = Document(
+                            id=doc_id,
+                            content=content,
+                            source_file=os.path.basename(file_path)
+                        )
+                        documents.append(doc)
+                    except json.JSONDecodeError:
+                        print(f"警告: 无效的JSON行: {line}")
+                        continue
+        except Exception as e:
+            raise Exception(f"读取JSONL文件失败: {str(e)}")
             
         return documents
     
@@ -58,28 +59,70 @@ class TaskService:
             task_data: 任务数据，包含：
                 - name: 任务名称
                 - description: 任务描述 
-                - data_file: 数据文件
-                - template: 任务模板名称
-                - config: 可标注字段配置列表，每个字段包含value和type
+                - files: 数据文件名列表
+                - template: 任务模板名称（可选）
+                - config: 可标注字段配置列表（可选），每个字段包含key和type
+                - format_template: 格式化模板（可选）
+                
+        Raises:
+            ValueError: 当数据文件格式校验失败时，返回具体的错误信息
         """
-        # try:
-        
         # 生成任务ID
         task_id = str(uuid.uuid4())
         
-        template_path = os.path.join(self.task_templates_dir, task_data['template'])
+        # 获取文件路径列表
+        files_path = task_data.get('files', [])
+        if isinstance(files_path, str):
+            files_path = [files_path]
 
-        # 如果没有提供config，则使用模板中的配置
-        # print(task_data.get('config'))
-        task_config = TaskConfig()
+        # 如果提供了格式化模板，先对数据文件进行格式校验
+        if task_data.get('format_template'):
+            format_template_path = os.path.join("data/format_templates", task_data['format_template'])
+            if not os.path.exists(format_template_path):
+                raise ValueError(f"格式化模板文件不存在: {task_data['format_template']}")
+                
+            checker = JsonChecker(model_file=Path(format_template_path))
+            
+            # 校验每个数据文件
+            error_messages = []
+            for file_path in files_path:
+                full_path = os.path.join(self.upload_dir, file_path)
+                if not os.path.exists(full_path):
+                    raise ValueError(f"数据文件不存在: {file_path}")
+                    
+                try:
+                    # 使用checker验证文件格式
+                    checker.process_file(Path(full_path), mode='validate')
+                except Exception as e:
+                    # 收集具体的错误信息
+                    error_msg = f"文件 {file_path} 格式校验失败:\n{str(e)}"
+                    error_messages.append(error_msg)
+                    
+            # 如果有错误，抛出所有错误信息
+            if error_messages:
+                raise ValueError("\n".join(error_messages))
         
-        # print("123"*20,task_data['data_file'])
+        # 如果提供了自定义标注字段配置，使用自定义配置构造TaskConfig
+        task_config = TaskConfig()
+        if task_data.get('config'):
+            task_config = TaskConfig(fields=[{
+                "key": field['key'],
+                "type": field['type']
+            } for field in task_data['config']])
+        # 如果没有提供config但提供了template，则使用模板中的配置
+        elif task_data.get('template'):
+            template_path = os.path.join(self.task_templates_dir, task_data['template'])
+            if os.path.exists(template_path):
+                with open(template_path, 'r', encoding='utf-8') as f:
+                    template_data = json.load(f)
+                    task_config = TaskConfig(fields=template_data.get('need_be_marked_list', []))
+
         # 创建任务对象
         task = Task(
             id=task_id,
             name=task_data['name'],
             description=task_data['description'],
-            files_path=[task_data['data_file']],
+            files_path=files_path,
             config=task_config.get_beMarked(),  # 将TaskConfig转换为字段配置列表
             status=TaskStatus.PENDING,
             created_at=datetime.now(),
@@ -89,71 +132,68 @@ class TaskService:
         # 保存任务配置
         self.save_task(task)
         return task
-
-        # except Exception as e:
-        #     raise Exception(f"创建任务失败: {str(e)}")
     
     def get_task(self, task_id: str) -> Optional[Task]:
         """获取任务信息"""
-        # try:
-        task_file_path = os.path.join(self.tasks_dir, f"{task_id}.json")
-        if not os.path.exists(task_file_path):
-            return None
-            
-        with open(task_file_path, 'r', encoding='utf-8') as f:
-            task_data = json.load(f)
-            return Task(**task_data)
+        try:
+            task_file_path = os.path.join(self.tasks_dir, f"{task_id}.json")
+            if not os.path.exists(task_file_path):
+                return None
                 
-        # except Exception as e:
-        #     raise Exception(f"获取任务失败: {str(e)}")
+            with open(task_file_path, 'r', encoding='utf-8') as f:
+                task_data = json.load(f)
+                return Task(**task_data)
+                    
+        except Exception as e:
+            raise Exception(f"获取任务失败: {str(e)}")
 
     def get_all_tasks(self) -> List[Task]:
         """获取所有任务"""
         tasks = []
-        # try:
-        for filename in os.listdir(self.tasks_dir):
-            if filename.endswith('.json'):
-                task_file_path = os.path.join(self.tasks_dir, filename)
-                with open(task_file_path, 'r', encoding='utf-8') as f:
-                    task_data = json.load(f)
-                    print(f"加载任务: {task_data['id']}")
-                    tasks.append(Task(**task_data))
-        return tasks
-        # except Exception as e:
-        #     raise Exception(f"获取任务列表失败: {str(e)}")
+        try:
+            for filename in os.listdir(self.tasks_dir):
+                if filename.endswith('.json'):
+                    task_file_path = os.path.join(self.tasks_dir, filename)
+                    with open(task_file_path, 'r', encoding='utf-8') as f:
+                        task_data = json.load(f)
+                        print(f"加载任务: {task_data['id']}")
+                        tasks.append(Task(**task_data))
+            return tasks
+        except Exception as e:
+            raise Exception(f"获取任务列表失败: {str(e)}")
     
     def get_task_documents(self, task_id: str) -> List[Dict[str, Any]]:
         """获取任务的文档列表"""
-        # try:
-        task = self.get_task(task_id)
-        if not task:
-            raise ValueError(f"任务不存在: {task_id}")
-        
-        documents = []
-        # 从上传目录加载文档
-        for file_path in task.files_path:
-            full_path = os.path.join(self.upload_dir, file_path)
-            if not os.path.exists(full_path):
-                print(f"警告: 数据文件不存在: {full_path}")
-                continue
+        try:
+            task = self.get_task(task_id)
+            if not task:
+                raise ValueError(f"任务不存在: {task_id}")
             
-            try:
-                with open(full_path, 'r', encoding='utf-8') as f:
-                    file_content = json.load(f)
-                    # 如果文件内容是列表，直接使用
-                    if isinstance(file_content, list):
-                        documents.extend(file_content)
-                    # 如果是单个文档，包装成列表
-                    elif isinstance(file_content, dict):
-                        documents.append(file_content)
-            except Exception as e:
-                print(f"读取文件 {full_path} 失败: {str(e)}")
-                continue
-        
-        return documents
+            documents = []
+            # 从上传目录加载文档
+            for file_path in task.files_path:
+                full_path = os.path.join(self.upload_dir, file_path)
+                if not os.path.exists(full_path):
+                    print(f"警告: 数据文件不存在: {full_path}")
+                    continue
+                
+                try:
+                    with open(full_path, 'r', encoding='utf-8') as f:
+                        file_content = json.load(f)
+                        # 如果文件内容是列表，直接使用
+                        if isinstance(file_content, list):
+                            documents.extend(file_content)
+                        # 如果是单个文档，包装成列表
+                        elif isinstance(file_content, dict):
+                            documents.append(file_content)
+                except Exception as e:
+                    print(f"读取文件 {full_path} 失败: {str(e)}")
+                    raise ValueError(f"读取文件失败: {str(e)}")
             
-        # except Exception as e:
-        #     raise Exception(f"获取任务文档失败: {str(e)}")
+            return documents
+                
+        except Exception as e:
+            raise Exception(f"获取任务文档失败: {str(e)}")
             
     def get_task_document(self, task_id: str, document_id: str) -> Optional[Dict[str, Any]]:
         """获取任务中的单个文档"""

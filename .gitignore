@@ -1,11 +1,15 @@
 frontend/node_modules/
 .idea
+backend/app/__pycache__
 backend/app/api/__pycache__
 backend/app/services/__pycache__
+backend/app/schemas/__pycache__
 
 
 backend\data\upload
-backend/data/raw/oringinal_data/*.jsonl
+backend\data\tasks
+
+backend/data/oringinal_data/
 exampleData/
 
 backend\data\raw\example.json
