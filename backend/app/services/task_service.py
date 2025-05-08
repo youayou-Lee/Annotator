@@ -3,7 +3,8 @@ import json
 import uuid
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from ..models.task import Task, TaskConfig, Document, TaskStatus, TaskType
+from ..models.task import Task, TaskConfig, TaskStatus, TaskType
+from ..models.document import Document # Import Document from the correct module
 from sqlalchemy.orm import Session
 from ..schemas import JsonChecker
 from pathlib import Path

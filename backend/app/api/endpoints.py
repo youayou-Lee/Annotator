@@ -334,16 +334,37 @@ async def save_annotation(
 async def get_annotation(
     task_id: str,
     document_id: str,
-    annotator_service: AnnotatorService = Depends(get_annotator_service)
+    annotator_service: AnnotatorService = Depends(get_annotator_service),
+    task_service: TaskService = Depends(get_task_service) # Add task_service dependency
 ):
-    """获取标注结果"""
+    """获取标注结果，并与原始文档合并"""
     try:
-        doc = annotator_service.load_annotation(task_id, document_id)
-        if (doc is None):
-            return {"annotation": {}}
-        return {"annotation": doc}  # 返回完整的带标注的文档
+        # First, get the original document content
+        original_document = task_service.get_task_document(task_id, document_id)
+        if not original_document:
+            # If original document not found, it might mean document_id is invalid or not part of task
+            raise HTTPException(status_code=404, detail=f"Document {document_id} not found in task {task_id}")
+
+        # Load annotation and merge it with the original document content
+        merged_document = annotator_service.load_annotation(task_id, document_id, original_document)
+        
+        if merged_document is None:
+            # This case implies an issue with loading or merging the annotation itself, 
+            # or if load_annotation returns None when no annotation file exists but original_document was also None (which is handled above).
+            # For clarity, if original_document exists but annotation loading/merging fails, 
+            # it might be better to return original_document or a specific error.
+            # Assuming load_annotation returns original_document if no annotation file, 
+            # this path (merged_document is None) means a more critical error or original_document was None initially.
+            # Given the check for original_document above, this implies a failure in load_annotation beyond just missing annotation file.
+            return {"annotation": original_document} # Fallback to original if merge fails but original was found
+            
+        return {"annotation": merged_document} # Return the merged document
+
+    except HTTPException as he: # Re-raise HTTPExceptions directly
+        raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error getting annotation for doc {document_id} in task {task_id}: {str(e)}") # Log error
+        raise HTTPException(status_code=500, detail=f"获取标注结果失败: {str(e)}")
 
 # AI审查
 @router.post("/tasks/{task_id}/ai-review")

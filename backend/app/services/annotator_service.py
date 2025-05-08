@@ -1,5 +1,4 @@
 from typing import Dict, Any, List, Optional
-from ..models.document import Document
 from ..models.task import Task
 import json
 import os
@@ -10,7 +9,7 @@ class AnnotatorService:
     
     def __init__(self, output_dir: str):
         self.output_dir = output_dir
-        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(self.output_dir, exist_ok=True)
 
     def _find_field_in_document(self, doc: Dict[str, Any], field_name: str) -> tuple[Dict[str, Any], str, bool]:
         """递归搜索文档中的字段
@@ -62,7 +61,7 @@ class AnnotatorService:
         
         return task_dir
     
-    def save_annotation(self, task_id: str, document_id: str, annotation: Dict[str, Any]) -> bool:
+    def save_annotation(self, task_id: str, document_id: str, annotation: Dict[str, Any]) -> Optional[str]:
         """保存标注结果"""
         try:
             # 创建标注目录
@@ -78,26 +77,25 @@ class AnnotatorService:
                 with open(task_file, 'r', encoding='utf-8') as f:
                     task_data = json.load(f)
                     config = task_data.get('config', [])
-                    # 从配置中获取需要标注的字段
-                    fields_to_annotate = [field['key'] for field in config]
+                    fields_to_annotate = [field['key'] for field in config if isinstance(field, dict) and 'key' in field]
                     
-                    # 只保存配置中指定的标注字段
                     for field in fields_to_annotate:
                         if field in annotation:
                             annotation_data[field] = annotation[field]
-            
-            # 如果是第一次保存，创建新文件
+            else:
+                print(f"Warning: Task file {task_file} not found during save_annotation for task {task_id}.")
+                annotation_data = annotation 
+
             annotation_path = os.path.join(doc_dir, f"{document_id}_annotation.json")
             
-            # 保存标注数据
             with open(annotation_path, 'w', encoding='utf-8') as f:
                 json.dump(annotation_data, f, ensure_ascii=False, indent=2)
             
-            return True
+            return annotation_path
             
         except Exception as e:
             print(f"保存标注失败: {str(e)}")
-            return False
+            return None
 
     def _get_path_to_field(self, doc: Dict[str, Any], field_name: str, current_path: List[str] = None) -> List[str]:
         """获取文档中字段的路径
@@ -129,91 +127,66 @@ class AnnotatorService:
                             return result
         return None
 
-    def _get_task_documents(self, task_id: str) -> List[Dict[str, Any]]:
-        """从任务文件中获取所有文档"""
+    def load_annotation(self, task_id: str, document_id: str, original_document_content: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]: 
+        """加载标注结果，并将标注内容合并到原始文档中 (如果提供)."""
         try:
-            task_file = os.path.join("data", "tasks", f"{task_id}.json")
-            if not os.path.exists(task_file):
-                return None
-            
-            with open(task_file, 'r', encoding='utf-8') as f:
-                task_data = json.load(f)
-                return task_data.get('documents', [])
-        except Exception as e:
-            print(f"获取任务文档失败: {str(e)}")
-            return None
-    
-    def load_annotation(self, task_id: str, document_id: str) -> Optional[Dict[str, Any]]: 
-        """加载标注结果，并将标注内容合并到原始文档中"""
-        try:
-            # 获取原始文档
-            doc_path = os.path.join("data", "raw", "upload", f"{document_id}.json")
-            if not os.path.exists(doc_path):
-                # 如果单独的文档文件不存在，尝试从任务文件中获取
-                task_docs = self._get_task_documents(task_id)
-                if not task_docs:
-                    return None
-                doc = next((d for d in task_docs if d.get('id') == document_id), None)
-                if not doc:
-                    return None
-            else:
-                with open(doc_path, 'r', encoding='utf-8') as f:
-                    doc = json.load(f)
+            # 使用原始文档的深拷贝，如果提供了原始文档
+            doc_to_merge_into = None
+            if original_document_content:
+                doc_to_merge_into = json.loads(json.dumps(original_document_content))
 
-            # 加载标注文件
-            task_dir = os.path.join(self.output_dir, task_id)
-            annotation_path = os.path.join(task_dir, f"{document_id}_annotation.json")
+            annotation_file_path = os.path.join(self.output_dir, task_id, f"{document_id}_annotation.json")
             
-            if not os.path.exists(annotation_path):
-                return doc
+            if not os.path.exists(annotation_file_path):
+                return doc_to_merge_into 
             
-            # 读取标注内容
-            with open(annotation_path, 'r', encoding='utf-8') as f:
-                annotation = json.load(f)
+            with open(annotation_file_path, 'r', encoding='utf-8') as f:
+                annotation_data = json.load(f)
                 
-            # 将标注内容合并到原始文档中
-            for field_path, value in annotation.items():
-                # 对于没有明确路径的字段，在文档中搜索已存在的位置
+            if doc_to_merge_into is None:
+                return annotation_data
+
+            # 合并标注数据到原始文档
+            for field_path, value in annotation_data.items():
                 if '.' not in field_path:
-                    container, name, found = self._find_field_in_document(doc, field_path)
+                    container, name, found = self._find_field_in_document(doc_to_merge_into, field_path)
                     if found:
                         container[name] = value
+                    else:
+                        doc_to_merge_into[field_path] = value
                 else:
-                    # 处理带路径的字段
                     parts = field_path.split('.')
-                    current = doc
+                    current_level = doc_to_merge_into
                     
-                    # 遍历路径
                     for i, part in enumerate(parts[:-1]):
                         if part.isdigit():
                             idx = int(part)
-                            if not isinstance(current, list):
-                                current = []
-                            while len(current) <= idx:
-                                current.append({})
-                            current = current[idx]
+                            if not isinstance(current_level, list):
+                                current_level = []
+                            while len(current_level) <= idx:
+                                current_level.append({})
+                            current_level = current_level[idx]
                         else:
-                            if part not in current:
-                                current[part] = {}
-                            current = current[part]
+                            if part not in current_level:
+                                current_level[part] = {}
+                            current_level = current_level[part]
                     
-                    # 设置最终值
-                    last_part = parts[-1]
-                    if last_part.isdigit():
-                        idx = int(last_part)
-                        if not isinstance(current, list):
-                            current = []
-                        while len(current) <= idx:
-                            current.append(None)
-                        current[idx] = value
+                    final_key = parts[-1]
+                    if final_key.isdigit():
+                        idx = int(final_key)
+                        if not isinstance(current_level, list):
+                            current_level = []
+                        while len(current_level) <= idx:
+                            current_level.append(None)
+                        current_level[idx] = value
                     else:
-                        current[last_part] = value
-                        
-            return doc
+                        current_level[final_key] = value
+
+            return doc_to_merge_into
                 
         except Exception as e:
-            print(f"加载标注失败: {str(e)}")
-            return None
+            print(f"加载标注或合并失败: {str(e)}")
+            return None 
     
     def validate_annotation(self, annotation: Dict[str, Any], template: Dict[str, Any]) -> bool:
         """验证标注结果"""

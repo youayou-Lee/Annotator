@@ -2,7 +2,6 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, model_validator
 from datetime import datetime
 import enum, os, json
-from .document import Document
 
 
 class TaskStatus(str, enum.Enum):
@@ -17,8 +16,6 @@ class TaskType(str, enum.Enum):
     COMPARISON = "comparison"
     TRAINING = "training"
 
-
-
 class Task(BaseModel):
     """标注任务模型"""
     id: str = Field(..., description="任务唯一标识")
@@ -29,38 +26,12 @@ class Task(BaseModel):
     status: str = Field(default="pending", description="任务状态")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
-    config: List[Dict[str, Any]] = Field(default_factory=list, description="任务配置，包含字段路径和类型")  # 修改为支持字典格式
-    annotations: Dict[str, Any] = Field(default_factory=dict, description="标注结果")
-    documents: List['Document'] = Field(default_factory=list, description="任务关联的文书List")
-
-    def set_all_documents(self) -> List['Document']:
-        """初始化所有文书信息"""
-        self.documents = []
-        self.document_ids = []  # 重置document_ids
-        for file_path in self.files_path:
-            file_path = os.path.join("data", "upload", file_path)  # 拼接文件路径
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    if isinstance(data, dict):
-                        # 如果是单个文档，转换为列表
-                        data = [data]
-                    for item in data:
-                        document = Document(**item)
-                        self.documents.append(document)
-                        # 确保document_ids包含所有文档ID
-                        if hasattr(document, 'id') and document.id:
-                            self.document_ids.append(document.id)
-            except Exception as e:
-                raise ValueError(f"读取文件 {file_path} 失败: {str(e)}")
-        return self.documents
+    config: List[Dict[str, Any]] = Field(default_factory=list, description="任务配置，包含字段路径和类型")
+    annotations_paths: List[str] = Field(default_factory=list, description="标注结果的保存路径列表")
 
     def __init__(self,**data):
         super().__init__(**data)
-        # 初始化后自动调用set_all_documents
-        if self.files_path:  # 如果有文件路径才初始化
-            self.set_all_documents()
-    
+
 
 class FieldConfig(BaseModel):
     """字段配置模型"""
