@@ -269,28 +269,69 @@ const loadDocument = async (page: number) => {
     if (documentList.value && documentList.value.length > 0) {
       const currentDoc = documentList.value[page - 1]
       if (currentDoc) {
-        // 确保文档有 ID
-        if (!currentDoc.id && currentDoc.s5) {
-          currentDoc.id = currentDoc.s5
+        // 确保每份文书都有一个id字段
+        let documentId = currentDoc.id
+        
+        // 如果没有id字段，则尝试从其他字段生成一个id
+        if (!documentId) {
+
+          console.log('该Document没有ID！！！不合格，打回去重新搞')
+
+        }
+        
+        // 根据任务配置初始化必要的字段结构
+        if (taskConfig.value && taskConfig.value.initializeStructure) {
+          for (const [key, defaultValue] of Object.entries(taskConfig.value.initializeStructure)) {
+            if (!currentDoc[key] || (Array.isArray(currentDoc[key]) && currentDoc[key].length === 0)) {
+              console.log(`初始化字段: ${key}`)
+              currentDoc[key] = JSON.parse(JSON.stringify(defaultValue))
+            }
+          }
         }
 
-        // 先加载标注结果
+        console.log('开始加载标注数据...')
+        // 加载标注结果
         try {
-          const annotationResponse = await axios.get(`/api/tasks/${taskId.value}/annotations/${currentDoc.id}`)
-          if (annotationResponse.data && annotationResponse.data.annotation) {
+          const annotationResponse = await axios.get(`/api/tasks/${taskId.value}/annotations/${documentId}`)
+          console.log('标注响应:', annotationResponse.data)
+          
+          if (annotationResponse.data && annotationResponse.data.annotation && Object.keys(annotationResponse.data.annotation).length > 0) {
+            console.log('找到标注数据，合并中...')
             // 创建原始文档的深拷贝
             const mergedDoc = JSON.parse(JSON.stringify(currentDoc))
             // 使用深度合并
             currentDocument.value = deepMerge(mergedDoc, annotationResponse.data.annotation)
             // 确保 ID 不会被覆盖
-            currentDocument.value.id = currentDoc.id
+            currentDocument.value.id = documentId
+            
+            // 添加记录
+            annotationHistory.value.unshift({
+              timestamp: new Date().toLocaleString(),
+              content: `已加载文档 [${documentId}] 的标注数据`,
+              type: 'success'
+            })
           } else {
-            // 如果没有标注结果，使用原始文档
+            console.warn('未找到有效标注数据')
+            // 如果没有标注结果或为空对象，使用原始文档
             currentDocument.value = JSON.parse(JSON.stringify(currentDoc))
+            
+            // 添加记录
+            annotationHistory.value.unshift({
+              timestamp: new Date().toLocaleString(),
+              content: `未找到文档 [${documentId}] 的标注数据，使用原始文档`,
+              type: 'warning'
+            })
           }
         } catch (error) {
-          console.warn('未找到已有标注，使用原始文档')
+          console.warn('加载标注数据失败:', error)
           currentDocument.value = JSON.parse(JSON.stringify(currentDoc))
+          
+          // 添加记录
+          annotationHistory.value.unshift({
+            timestamp: new Date().toLocaleString(),
+            content: `加载标注数据失败: ${error.message || '未知错误'}`,
+            type: 'danger'
+          })
         }
       }
     }
@@ -383,7 +424,8 @@ const findPathsInDocument = (document: any, key: string, currentPath: string = "
       }
       if (Array.isArray(v)) {
         v.forEach((item, index) => {
-          const arrayPath = `${newPath}[${index}]`
+          // 使用点号表示法处理数组索引，而不是方括号
+          const arrayPath = `${newPath}.${index}`
           paths.push(...findPathsInDocument(item, key, arrayPath))
         })
       } else if (typeof v === 'object' && v !== null) {
@@ -501,15 +543,25 @@ const saveAnnotation = async () => {
   }
 }
 
+// 合并标注
 const mergeAnnotations = async () => {
   try {
-    await axios.post(`/api/tasks/${taskId.value}/merge-annotations`)
-    ElMessage.success('合并标注成功')
-    annotationHistory.value.unshift({
-      timestamp: new Date().toLocaleString(),
-      content: '重新合并标注完成',
-      type: 'success'
-    })
+    // 先保存当前文档的标注，确保最新的更改被包含
+    await saveAnnotation()
+    
+    // 调用后端合并接口
+    const response = await axios.post(`/api/tasks/${taskId.value}/merge-annotations`)
+    
+    if (response.data.status === 'success') {
+      ElMessage.success('合并标注成功')
+      annotationHistory.value.unshift({
+        timestamp: new Date().toLocaleString(),
+        content: '标注已成功合并并保存到merged_data目录',
+        type: 'success'
+      })
+    } else {
+      throw new Error(response.data.message || '合并操作返回未知状态')
+    }
   } catch (error) {
     console.error('合并标注失败:', error)
     ElMessage.error('合并标注失败: ' + (error.response?.data?.detail || error.message))
