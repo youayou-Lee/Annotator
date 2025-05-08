@@ -1,0 +1,12 @@
+{
+    "need_be_marked_list": [
+        {
+            "key": "嫌疑人",
+            "type": "string"
+        },
+        {
+            "key": "被告人",
+            "type": "string"
+        }
+    ]
+} 

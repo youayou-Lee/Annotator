@@ -88,11 +88,12 @@ async def get_format_template_content(
 async def process_jsonl_file(
     jsonl_file: UploadFile = File(...),
     template_file: UploadFile = None,
+    template_name: str = Form(None),
     format_service: FormatService = Depends(get_format_service)
 ):
     """处理JSONL文件，根据模板进行格式化"""
     try:
-        result = await format_service.process_file(jsonl_file, template_file)
+        result = await format_service.process_file(jsonl_file, template_file, template_name)
         return {
             "success": True,
             "message": "文件处理成功",

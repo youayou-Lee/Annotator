@@ -1,27 +1,40 @@
 import json
 import importlib.util
 import sys
+import random
+import string
 from pathlib import Path
 from typing import Type, Dict, Any, List, Optional, Union
 from pydantic import BaseModel, ValidationError
 from pydantic_core import PydanticUndefined, PydanticCustomError
+
+def generate_random_id(length: int = 16) -> str:
+    """生成指定长度的随机字符串作为ID"""
+    characters = string.ascii_letters + string.digits
+    return ''.join(random.choice(characters) for _ in range(length))
+
 class JsonChecker:
     def __init__(
         self,
-        model_file: Optional[Path] = None,
-        default_model: Optional[Type[BaseModel]] = None,
-        model_name: Optional[str] = "Document"  # 新增：指定模型类名
+        model_file: Optional[Path],
     ):
-        self.model = default_model
         if model_file is not None:
-            self.model = self._load_model_from_pyfile(model_file, model_name)  # 传递 model_name
-        elif default_model is None:
-            raise ValueError("必须提供模型文件或默认模型")
+            self.model = self._load_model_from_pyfile(model_file)  # 传递 model_name
+        else:
+            raise ValueError("必须提供模型文件")
+        
+        # 验证模型是否包含id字段
+        self._validate_model_has_id()
+        
+    def _validate_model_has_id(self):
+        """验证模型是否包含id字段 (Pydantic v2)"""
+        if "id" not in self.model.model_fields:
+            # 不强制要求模型包含id字段，将在填充模板时自动添加
+            print(f"提示: 模型 {self.model.__name__} 没有id字段，将在填充模板时自动添加")
 
     def _load_model_from_pyfile(
         self, 
         file_path: Path, 
-        model_name: Optional[str] = None  # 新增：指定模型类名
     ) -> Type[BaseModel]:
         """从Python文件中加载指定名称的Pydantic模型"""
         module_name = f"user_model_{file_path.stem}"
@@ -32,18 +45,22 @@ class JsonChecker:
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
         spec.loader.exec_module(module)
-        
         # 查找所有BaseModel子类
-        models = []
-        for name, obj in vars(module).items():
-            if isinstance(obj, type) and issubclass(obj, BaseModel) and obj is not BaseModel:
-                if model_name is None or name == model_name:  # 未指定名称或名称匹配
-                    models.append(obj)
-        
-        if not models:
-            raise ValueError(f"Python文件中未找到模型{' ' + model_name if model_name else ''}")
-        
-        return models[0]  # 返回匹配的第一个模型
+        models = [
+            obj for name, obj in vars(module).items()
+            if (isinstance(obj, type) and 
+                issubclass(obj, BaseModel) and 
+                obj is not BaseModel)
+        ]
+        # 如果只有一个模型，直接返回
+        if len(models) == 1:
+            return models[0]
+
+        # 如果有多个模型，优先返回名为"Document"的模型
+        if len(models) > 1:
+            for model in models:
+                if model.__name__ == "Document":
+                    return model
 
     def validate(self, json_data: Union[Dict[str, Any], List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
         """
@@ -55,6 +72,15 @@ class JsonChecker:
         """
         if not isinstance(json_data, list):
             json_data = [json_data]
+
+        # 验证每个项目是否包含id字段且不为空
+        for item in json_data:
+            if "id" not in item or not item["id"]:
+                raise PydanticCustomError(
+                    "id_validation_error",
+                    "每个数据项必须包含非空的id字段",
+                    {"field": "id"}
+                )
 
         validated_data = []
         for item in json_data:
@@ -75,9 +101,10 @@ class JsonChecker:
                 )
 
         return validated_data
+        
     def fill_template(self, json_data: Union[Dict[str, Any], List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
         """
-        将JSON数据填充到模板中
+        将JSON数据填充到模板中 (Pydantic v2)
 
         :param json_data: 要填充的JSON数据（单个对象或列表）
         :return: 填充后的数据列表
@@ -87,10 +114,19 @@ class JsonChecker:
 
         filled_data = []
         for item in json_data:
+            # 检查id字段是否存在且不为空，否则生成随机id
+            if "id" not in item or not item["id"]:
+                item["id"] = generate_random_id(16)
+                
             # 获取模型字段及其信息
-            model_fields = self.model.__fields__
+            model_fields = self.model.model_fields
             filled_item = {}
 
+            # 添加id字段（如果模型中没有）
+            if "id" not in model_fields:
+                filled_item["id"] = item.get("id", generate_random_id(16))
+
+            # 填充模型字段
             for field_name, field_info in model_fields.items():
                 # 获取字段类型和默认值
                 field_type = field_info.annotation
@@ -99,10 +135,18 @@ class JsonChecker:
                 # 处理未定义默认值的情况
                 if default_value == PydanticUndefined:
                     default_value = self._get_default_for_type(field_type)
+                
+                # 确保id字段不为空
+                if field_name == "id" and (default_value is None or default_value == ""):
+                    default_value = generate_random_id(16)
 
                 # 尝试从用户数据中获取值
                 if field_name in item:
                     user_value = item[field_name]
+                    # 特殊处理id字段，如果为空则生成随机id
+                    if field_name == "id" and (user_value is None or user_value == ""):
+                        user_value = generate_random_id(16)
+                        
                     # 检查类型是否匹配
                     try:
                         # 跳过 Any 类型的检查
@@ -137,7 +181,7 @@ class JsonChecker:
         return filled_data
 
     def _get_default_for_type(self, field_type: Type) -> Any:
-        """根据字段类型返回合理的默认值，保留嵌套结构"""
+        """根据字段类型返回合理的默认值，保留嵌套结构 (Pydantic v2)"""
         # 处理 Optional/Union 类型
         if hasattr(field_type, "__origin__") and field_type.__origin__ is Union:
             # 取第一个非None类型
@@ -179,19 +223,21 @@ class JsonChecker:
         elif field_type is dict:
             return {}
 
-        # 处理嵌套Pydantic模型
+        # 处理嵌套Pydantic模型 (Pydantic v2)
         try:
             if isinstance(field_type, type) and issubclass(field_type, BaseModel):
                 # 递归创建嵌套模型的默认结构
                 nested_default = {}
-                for name, model_field in field_type.model_fields.items():  # 注意这里改为 model_fields
-                    nested_default[name] = self._get_default_for_type(model_field.annotation)  # 使用 annotation 而不是 type_
+                # Pydantic v2
+                for name, model_field in field_type.model_fields.items():
+                    nested_default[name] = self._get_default_for_type(model_field.annotation)
                 return nested_default
         except TypeError:
             pass
 
         # 默认返回None
         return None
+
     def process_file(self, json_file: Path, mode: str = 'validate') -> List[Dict[str, Any]]:
         """
         处理JSON/JSONL文件
@@ -231,6 +277,6 @@ def formatting_verrification(json_file: Path, temp_py:Path, mode: str = 'validat
     :param mode: 处理模式 ('validate' 或 'fill')
     :return: 处理后的数据列表
     """
-    checker = JsonChecker(model_file=Path(temp_py)) if temp_py else JsonChecker(default_model=Document)
+    checker = JsonChecker(model_file=Path(temp_py))
 
     return checker.process_file(Path(temp_jsonl), mode=mode)

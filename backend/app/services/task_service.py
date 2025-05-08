@@ -81,7 +81,7 @@ class TaskService:
             format_template_path = os.path.join("data/format_templates", task_data['format_template'])
             if not os.path.exists(format_template_path):
                 raise ValueError(f"格式化模板文件不存在: {task_data['format_template']}")
-                
+            # print("1231231231231", format_template_path)
             checker = JsonChecker(model_file=Path(format_template_path))
             
             # 校验每个数据文件

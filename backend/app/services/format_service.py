@@ -18,8 +18,17 @@ class FormatService:
 
         self.templates_dir = os.path.join("data", "format_templates")
 
-    async def process_file(self, jsonl_file: UploadFile, template_file: Optional[UploadFile] = None) -> Dict[str, Any]:
-        """处理上传的JSONL文件和Python模板文件"""
+    async def process_file(self, jsonl_file: UploadFile, template_file: Optional[UploadFile] = None, template_name: Optional[str] = None) -> Dict[str, Any]:
+        """处理上传的JSONL文件和Python模板文件
+        
+        Args:
+            jsonl_file: 上传的JSONL或JSON文件
+            template_file: 可选，上传的Python模板文件
+            template_name: 可选，预定义模板的文件名
+            
+        Returns:
+            Dict[str, Any]: 处理结果
+        """
         # 验证输入文件
         if not (jsonl_file.filename.endswith('.jsonl') or jsonl_file.filename.endswith('.json')):
             raise HTTPException(status_code=400, detail="只接受 JSONL 或 JSON 格式的文件")
@@ -45,16 +54,32 @@ class FormatService:
                 f.write(content)
                 await jsonl_file.seek(0)
 
-            # 如果有模板文件，保存模板文件
+            # 处理模板文件 - 三种情况：
+            # 1. 用户上传的自定义模板
+            # 2. 用户选择的预定义模板
+            # 3. 默认模板（未实现）
+            
             if template_file:
+                # 情况1: 用户上传的自定义模板
                 temp_py = os.path.join(temp_dir, f"temp_{timestamp}.{template_file.filename.split('.')[-1]}")
                 template_content = await template_file.read()
                 if not template_content:
                     raise HTTPException(status_code=400, detail="模板文件内容为空")
                 with open(temp_py, 'wb') as f:
                     f.write(template_content)
-
-            # 初始化校验器
+            elif template_name:
+                # 情况2: 用户选择的预定义模板
+                template_path = os.path.join(self.templates_dir, template_name)
+                if not os.path.exists(template_path):
+                    raise HTTPException(status_code=404, detail=f"模板文件 {template_name} 不存在")
+                
+                # 将预定义模板复制到临时目录
+                temp_py = os.path.join(temp_dir, f"temp_{timestamp}.py")
+                with open(template_path, 'rb') as src, open(temp_py, 'wb') as dst:
+                    dst.write(src.read())
+            else:
+                # 情况3: 没有提供模板，使用默认模板（这里应该有一个默认模板）
+                raise HTTPException(status_code=400, detail="必须提供模板文件或选择预定义模板")
 
             # 处理JSONL文件
             documents = []
@@ -62,16 +87,17 @@ class FormatService:
             error_count = 0
             error_details = []
             
-            checker = JsonChecker(model_file=Path(temp_py)) if temp_py else JsonChecker(default_model=Document)
+            checker = JsonChecker(model_file=Path(temp_py))
 
             documents.append(checker.process_file(Path(temp_jsonl), mode='fill'))
 
             # 保存结果
-            
             output_filename = f"formatted_{os.path.splitext(jsonl_file.filename)[0]}_{timestamp}.{jsonl_file.filename.split('.')[-1]}"
             output_path = os.path.join(self.output_dir, output_filename)
+            
             with jsonlines.open(output_path, mode='w') as writer:
                 writer.write_all(documents)
+            
             # 返回结果包含文件路径相关信息
             return {
                 "success": True,
@@ -82,7 +108,8 @@ class FormatService:
                 "output_path": output_path,
                 "error_details": error_details if error_details else None,
                 "original_filename": jsonl_file.filename,
-                "temp_file": temp_jsonl  # 添加临时文件路径供后续处理使用
+                "temp_file": temp_jsonl,  # 添加临时文件路径供后续处理使用
+                "template_used": template_name if template_name else (template_file.filename if template_file else "default")
             }
 
         finally:
@@ -97,6 +124,7 @@ class FormatService:
                     os.rmdir(temp_dir)
             except Exception:
                 pass
+
     def get_default_template(self) -> List[str]:
         """获取默认模板文件列表"""
         try:
