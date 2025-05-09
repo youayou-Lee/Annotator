@@ -274,9 +274,8 @@ const loadDocument = async (page: number) => {
         
         // 如果没有id字段，则尝试从其他字段生成一个id
         if (!documentId) {
-
           console.log('该Document没有ID！！！不合格，打回去重新搞')
-
+          return
         }
         
         // 根据任务配置初始化必要的字段结构
@@ -292,17 +291,14 @@ const loadDocument = async (page: number) => {
         console.log('开始加载标注数据...')
         // 加载标注结果
         try {
+          // 直接从后端获取已合并的文档数据
           const annotationResponse = await axios.get(`/api/tasks/${taskId.value}/annotations/${documentId}`)
           console.log('标注响应:', annotationResponse.data)
           
           if (annotationResponse.data && annotationResponse.data.annotation && Object.keys(annotationResponse.data.annotation).length > 0) {
-            console.log('找到标注数据，合并中...')
-            // 创建原始文档的深拷贝
-            const mergedDoc = JSON.parse(JSON.stringify(currentDoc))
-            // 使用深度合并
-            currentDocument.value = deepMerge(mergedDoc, annotationResponse.data.annotation)
-            // 确保 ID 不会被覆盖
-            currentDocument.value.id = documentId
+            console.log('找到标注数据')
+            // 直接使用后端返回的合并数据
+            currentDocument.value = annotationResponse.data.annotation
             
             // 添加记录
             annotationHistory.value.unshift({
@@ -463,81 +459,46 @@ const saveAnnotation = async () => {
       throw new Error('文档ID不存在')
     }
     
-    // 创建标注对象
-    const annotation = {}
+    // 创建完整的标注对象，包含所有字段
+    const annotation = JSON.parse(JSON.stringify(currentDocument.value))
     
-    // 获取当前文档中的实际字段路径
-    const currentFields = generateAnnotationFields.value
+    console.log('准备保存标注数据:', JSON.stringify(annotation).slice(0, 200) + '...')
     
-    for (const field of currentFields) {
-      const paths = field.paths || []
-      
-      // 确保路径有效
-      if (paths.length === 0) continue
-
-      // 处理每个路径
-      paths.forEach(path => {
-        const value = getFieldValue(currentDocument.value, path)
-        if (value !== undefined) {
-          // 使用点号分割路径并创建嵌套对象
-          let target = annotation
-          const parts = path.split('.')
-          
-          for (let i = 0; i < parts.length - 1; i++) {
-            const part = parts[i]
-            // 处理数组索引
-            if (!isNaN(Number(part))) {
-              const index = Number(part)
-              // 确保父级是数组
-              if (!Array.isArray(target)) {
-                target = []
-              }
-              // 初始化数组到所需长度
-              while (target.length <= index) {
-                target.push({})
-              }
-              if (!target[index]) {
-                target[index] = {}
-              }
-              target = target[index]
-            } else {
-              // 处理对象属性
-              if (!target[part] || typeof target[part] !== 'object') {
-                target[part] = {}
-              }
-              target = target[part]
-            }
-          }
-          
-          // 设置最终值
-          const lastPart = parts[parts.length - 1]
-          if (field.type === 'number') {
-            target[lastPart] = value === '' ? 0 : Number(value)
-          } else {
-            target[lastPart] = value
-          }
-        }
-      })
-    }
-
     // 发送到后端
-    await axios.post(
+    const saveResponse = await axios.post(
       `/api/tasks/${taskId.value}/annotations/${documentId}`, 
       annotation
     )
 
-    ElMessage.success('保存成功')
-    annotationHistory.value.unshift({
-      timestamp: new Date().toLocaleString(),
-      content: `已保存第 ${currentPage.value} 页的标注`,
-      type: 'success'
-    })
+    if (saveResponse.data && saveResponse.data.status === 'success') {
+      ElMessage.success('保存成功')
+      
+      // 保存成功后，通过GET请求获取最新的合并数据
+      try {
+        const refreshResponse = await axios.get(`/api/tasks/${taskId.value}/annotations/${documentId}`)
+        if (refreshResponse.data && refreshResponse.data.annotation) {
+          // 更新当前文档为最新合并数据
+          currentDocument.value = refreshResponse.data.annotation
+          console.log('已更新为最新合并数据')
+        }
+      } catch (refreshError) {
+        console.warn('刷新数据失败:', refreshError)
+      }
+      
+      annotationHistory.value.unshift({
+        timestamp: new Date().toLocaleString(),
+        content: `已保存第 ${currentPage.value} 页的标注`,
+        type: 'success'
+      })
+    } else {
+      throw new Error('保存失败，服务器返回异常状态')
+    }
   } catch (error) {
     console.error('保存标注失败:', error)
     ElMessage.error('保存失败: ' + (error.response?.data?.detail || error.message))
     annotationHistory.value.unshift({
       timestamp: new Date().toLocaleString(),
-      content: `保存第 ${currentPage.value} 页标注失败`,
+      content: `保存第 ${currentPage.value} 页标注失败: ${error.message}`,
       type: 'danger'
     })
   }

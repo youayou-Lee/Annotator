@@ -1,0 +1,34 @@
+{
+  "task_id": "932fb26a-b315-4c09-8192-6e1bdb36d4bb",
+  "merge_time": "20250509_145459",
+  "total_documents": 2,
+  "merged_documents": 2,
+  "all_completed": true,
+  "documents": [
+    {
+      "嫌疑人": [
+        "123"
+      ],
+      "被告人": [
+        "张三"
+      ],
+      "id": "sdfgh213231321dfghj",
+      "类型": "辨认笔录",
+      "摘要": "到此一游",
+      "original_doc_id": "sdfgh213231321dfghj"
+    },
+    {
+      "id": "sdfghjklkjhgfdfghj",
+      "嫌疑人": [
+        "李四",
+        "王五"
+      ],
+      "被告人": [
+        "123"
+      ],
+      "类型": "辨认笔录",
+      "摘要": "到此一游",
+      "original_doc_id": "sdfghjklkjhgfdfghj"
+    }
+  ]
+}

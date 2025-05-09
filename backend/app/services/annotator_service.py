@@ -68,28 +68,35 @@ class AnnotatorService:
             doc_dir = os.path.join(self.output_dir, task_id)
             os.makedirs(doc_dir, exist_ok=True)
             
-            # 构建标注对象，只包含标注的字段
-            annotation_data = {}
-            
-            # 获取任务配置来确定需要标注的字段
+            # 获取原始文档数据
             task_file = os.path.join("data", "tasks", f"{task_id}.json")
-            if os.path.exists(task_file):
-                with open(task_file, 'r', encoding='utf-8') as f:
-                    task_data = json.load(f)
-                    config = task_data.get('config', [])
-                    fields_to_annotate = [field['key'] for field in config if isinstance(field, dict) and 'key' in field]
-                    
-                    for field in fields_to_annotate:
-                        if field in annotation:
-                            annotation_data[field] = annotation[field]
-            else:
+            if not os.path.exists(task_file):
                 print(f"Warning: Task file {task_file} not found during save_annotation for task {task_id}.")
-                annotation_data = annotation 
-
+                annotation_data = annotation
+            else:
+                # 构建完整的标注数据
+                annotation_data = annotation
+            
             annotation_path = os.path.join(doc_dir, f"{document_id}_annotation.json")
+            
+            # 检查是否已有标注文件，如果有，合并而不是覆盖
+            if os.path.exists(annotation_path):
+                try:
+                    with open(annotation_path, 'r', encoding='utf-8') as f:
+                        existing_annotation = json.load(f)
+                        # 深度合并现有标注和新标注
+                        for field_name, value in annotation.items():
+                            existing_annotation[field_name] = value
+                    annotation_data = existing_annotation
+                except Exception as e:
+                    print(f"读取已有标注失败: {str(e)}，将使用新标注")
             
             with open(annotation_path, 'w', encoding='utf-8') as f:
                 json.dump(annotation_data, f, ensure_ascii=False, indent=2)
+            
+            # 打印保存成功信息和保存的数据，以便调试
+            print(f"标注保存成功：{annotation_path}")
+            print(f"保存的数据：{json.dumps(annotation_data, ensure_ascii=False)[:200]}...")
             
             return annotation_path
             
@@ -147,47 +154,47 @@ class AnnotatorService:
                 return annotation_data
 
             # 合并标注数据到原始文档
-            for field_path, value in annotation_data.items():
-                if '.' not in field_path:
-                    container, name, found = self._find_field_in_document(doc_to_merge_into, field_path)
-                    if found:
-                        container[name] = value
-                    else:
-                        doc_to_merge_into[field_path] = value
-                else:
-                    parts = field_path.split('.')
-                    current_level = doc_to_merge_into
-                    
-                    for i, part in enumerate(parts[:-1]):
-                        if part.isdigit():
-                            idx = int(part)
-                            if not isinstance(current_level, list):
-                                current_level = []
-                            while len(current_level) <= idx:
-                                current_level.append({})
-                            current_level = current_level[idx]
-                        else:
-                            if part not in current_level:
-                                current_level[part] = {}
-                            current_level = current_level[part]
-                    
-                    final_key = parts[-1]
-                    if final_key.isdigit():
-                        idx = int(final_key)
-                        if not isinstance(current_level, list):
-                            current_level = []
-                        while len(current_level) <= idx:
-                            current_level.append(None)
-                        current_level[idx] = value
-                    else:
-                        current_level[final_key] = value
+            for field_name, value in annotation_data.items():
+                # 直接将标注字段添加到原始文档中
+                # 这样标注数据会优先替换原始数据
+                doc_to_merge_into[field_name] = value
 
+                # 递归处理复杂字段结构的情况
+                if isinstance(value, dict) and field_name in doc_to_merge_into:
+                    self._merge_nested_fields(doc_to_merge_into[field_name], value)
+                
             return doc_to_merge_into
                 
         except Exception as e:
             print(f"加载标注或合并失败: {str(e)}")
             return None 
     
+    def _merge_nested_fields(self, target: Dict[str, Any], source: Dict[str, Any]) -> None:
+        """递归合并嵌套字段
+        
+        Args:
+            target: 目标字典（原始文档的字段）
+            source: 源字典（标注数据的字段）
+        """
+        for key, value in source.items():
+            if isinstance(value, dict) and key in target and isinstance(target[key], dict):
+                # 递归合并嵌套字典
+                self._merge_nested_fields(target[key], value)
+            elif isinstance(value, list) and key in target and isinstance(target[key], list):
+                # 合并列表，优先保留标注的值
+                if len(value) <= len(target[key]):
+                    for i, item in enumerate(value):
+                        if isinstance(item, dict) and isinstance(target[key][i], dict):
+                            self._merge_nested_fields(target[key][i], item)
+                        else:
+                            target[key][i] = item
+                else:
+                    # 如果标注列表更长，直接替换
+                    target[key] = value
+            else:
+                # 直接替换其他类型的值
+                target[key] = value
+
     def validate_annotation(self, annotation: Dict[str, Any], template: Dict[str, Any]) -> bool:
         """验证标注结果"""
         for key, value_type in template.items():

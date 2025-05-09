@@ -10,7 +10,7 @@ backend/data/oringinal_data/
 exampleData/
 
 backend\data\raw\example.json
-
+backend\data\merged_data
 /TODO.md
 
 clean.bat

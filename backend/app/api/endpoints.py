@@ -340,25 +340,38 @@ async def get_annotation(
 ):
     """获取标注结果，并与原始文档合并"""
     try:
+        print(f"开始获取文档 {document_id} 的标注...")
+        
         # First, get the original document content
         original_document = task_service.get_task_document(task_id, document_id)
         if not original_document:
             # If original document not found, it might mean document_id is invalid or not part of task
+            print(f"未找到文档 {document_id} 的原始内容")
             raise HTTPException(status_code=404, detail=f"Document {document_id} not found in task {task_id}")
 
+        print(f"获取到原始文档: {document_id}")
+        
+        # 检查标注文件是否存在
+        annotation_path = os.path.join("data", "annotations", task_id, f"{document_id}_annotation.json")
+        annotation_exists = os.path.exists(annotation_path)
+        print(f"标注文件路径: {annotation_path}, 是否存在: {annotation_exists}")
+        
+        if annotation_exists:
+            with open(annotation_path, 'r', encoding='utf-8') as f:
+                annotation_content = json.load(f)
+                print(f"读取到的标注内容: {json.dumps(annotation_content, ensure_ascii=False)[:200]}...")
+        
         # Load annotation and merge it with the original document content
         merged_document = annotator_service.load_annotation(task_id, document_id, original_document)
         
         if merged_document is None:
-            # This case implies an issue with loading or merging the annotation itself, 
-            # or if load_annotation returns None when no annotation file exists but original_document was also None (which is handled above).
-            # For clarity, if original_document exists but annotation loading/merging fails, 
-            # it might be better to return original_document or a specific error.
-            # Assuming load_annotation returns original_document if no annotation file, 
-            # this path (merged_document is None) means a more critical error or original_document was None initially.
-            # Given the check for original_document above, this implies a failure in load_annotation beyond just missing annotation file.
+            print(f"合并失败，返回原始文档")
             return {"annotation": original_document} # Fallback to original if merge fails but original was found
-            
+       
+        # 对比合并前后的差异，确认标注是否正确应用
+        print(f"合并后的文档: {json.dumps(merged_document, ensure_ascii=False)[:200]}...")
+        
+        # 返回包含标注的文档
         return {"annotation": merged_document} # Return the merged document
 
     except HTTPException as he: # Re-raise HTTPExceptions directly

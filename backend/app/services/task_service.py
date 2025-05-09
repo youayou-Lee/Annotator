@@ -205,21 +205,21 @@ class TaskService:
                 raise ValueError(f"任务不存在: {task_id}")
             
             # 验证文档ID是否在任务的document_ids中
-            if document_id not in task.document_ids and task.documents:
-                # 如果documents列表存在，尝试从中查找文档
-                for doc in task.documents:
-                    if doc.id == document_id:
-                        return doc.dict()
-                return None
+            if hasattr(task, 'document_ids') and document_id not in task.document_ids:
+                print(f"提示: 文档ID {document_id} 不在任务的document_ids列表中，将从文件中查找")
             
-            # 从文件中获取文档
+            # 从文件中获取文档列表
             documents = self.get_task_documents(task_id)
             for doc in documents:
                 if doc.get('id') == document_id:
                     return doc
+            
+            # 如果没有找到文档，返回None
+            print(f"警告: 未找到文档ID为 {document_id} 的文档")
             return None
             
         except Exception as e:
+            print(f"获取文档失败: {str(e)}")
             raise Exception(f"获取文档失败: {str(e)}")
     
     def update_document_status(self, task_id: str, document_id: str, status: str) -> bool:
