@@ -591,6 +591,25 @@ async def merge_task_annotations(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# 合并任务单个文档的标注结果
+@router.post("/tasks/{task_id}/merge-annotations")
+async def merge_task_document_annotations(
+    task_id: str,
+    task_service: TaskService = Depends(get_task_service)
+):
+    try:
+        output_path = task_service.merge_annotations(task_id)
+        if not output_path:
+            raise HTTPException(status_code=400, detail="合并失败或任务未完成标注")
+        
+        return {
+            "status": "success",
+            "message": "标注已成功合并",
+            "output_file": output_path
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # 检查任务完成状态
 @router.get("/tasks/{task_id}/completion")
 async def check_task_completion(

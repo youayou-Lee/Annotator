@@ -325,7 +325,7 @@ class TaskService:
     def merge_annotations(self, task_id: str) -> str:
         """合并标注结果到最终文档
         
-        将一个任务中的多个文档的标注结果合并成一个文件
+        将一个任务中的多个文档的标注结果合并成一个JSON文件，只保存文档内容
         """
         try:
             # 获取任务信息和原始文档
@@ -337,33 +337,43 @@ class TaskService:
             if not documents:
                 raise ValueError(f"任务没有文档: {task_id}")
             
-            # 加载标注结果
+            # 加载标注结果 - 直接从新的合并文件中读取
             annotations_dir = os.path.join("data", "annotations", task_id)
             if not os.path.exists(annotations_dir):
                 raise ValueError(f"标注目录不存在: {annotations_dir}")
-                
-            # 存储合并后的文档
+            
+            # 新的合并标注文件路径
+            annotation_file_path = os.path.join(annotations_dir, f"{task_id}_annotations.json")
+            
+            if not os.path.exists(annotation_file_path):
+                raise ValueError(f"标注文件不存在: {annotation_file_path}")
+            
+            # 读取已合并的标注
+            with open(annotation_file_path, 'r', encoding='utf-8') as f:
+                all_annotations = json.load(f)
+            
+            # 存储合并后的文档，只保留文档内容
             merged_documents = []
             
-            # 检查每个文档是否都有标注结果并合并
+            # 检查每个文档是否都有标注结果
             all_annotated = True
             for doc in documents:
                 doc_id = doc.get('id')
                 if not doc_id:
                     continue
-                    
-                annotation_path = os.path.join(annotations_dir, f"{doc_id}_annotation.json")
-                if not os.path.exists(annotation_path):
+                
+                # 检查该文档的标注是否存在于合并文件中
+                if doc_id not in all_annotations:
                     all_annotated = False
                     print(f"文档 {doc_id} 未完成标注")
                     continue
                 
-                # 读取标注结果
-                with open(annotation_path, 'r', encoding='utf-8') as f:
-                    annotated_doc = json.load(f)
-                    # 添加原始文档ID作为参考
-                    annotated_doc['original_doc_id'] = doc_id
-                    merged_documents.append(annotated_doc)
+                # 获取标注内容
+                annotated_doc = all_annotations[doc_id].copy()
+                # 去掉original_doc_id字段（如果存在）
+                if 'original_doc_id' in annotated_doc:
+                    del annotated_doc['original_doc_id']
+                merged_documents.append(annotated_doc)
             
             if not merged_documents:
                 raise ValueError("没有找到任何已标注的文档")
@@ -377,22 +387,13 @@ class TaskService:
             merged_dir = os.path.join("data", "merged_data")
             os.makedirs(merged_dir, exist_ok=True)
             
-            # 保存合并后的文档，包含时间戳以避免覆盖
+            # 保存合并后的文档，使用任务ID和时间戳避免覆盖
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_path = os.path.join(merged_dir, f"{task_id}_{timestamp}_merged.json")
             
-            # 创建合并文档的元数据
-            merged_data = {
-                "task_id": task_id,
-                "merge_time": timestamp,
-                "total_documents": len(documents),
-                "merged_documents": len(merged_documents),
-                "all_completed": all_annotated,
-                "documents": merged_documents
-            }
-            
+            # 只保存文档内容，不包含元数据
             with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(merged_data, f, ensure_ascii=False, indent=2)
+                json.dump(merged_documents, f, ensure_ascii=False, indent=2)
             
             return output_path
             
@@ -410,19 +411,32 @@ class TaskService:
             
             # 获取任务的文档列表
             documents = self.get_task_documents(task_id)
+            if not documents:
+                return False
             
-            # 检查每个文档是否都有标注结果
+            # 检查合并标注文件是否存在
             annotations_dir = os.path.join("data", "annotations", task_id)
             if not os.path.exists(annotations_dir):
                 return False
-                
+            
+            # 新的合并标注文件路径
+            annotation_file_path = os.path.join(annotations_dir, f"{task_id}_annotations.json")
+            
+            if not os.path.exists(annotation_file_path):
+                return False
+            
+            # 读取已合并的标注
+            with open(annotation_file_path, 'r', encoding='utf-8') as f:
+                all_annotations = json.load(f)
+            
+            # 检查每个文档是否都在合并文件中有标注结果
             for doc in documents:
                 doc_id = doc.get('id')
                 if not doc_id:
                     continue
-                    
-                annotation_path = os.path.join(annotations_dir, f"{doc_id}_annotation.json")
-                if not os.path.exists(annotation_path):
+                
+                # 如果任意一个文档没有标注，则返回False
+                if doc_id not in all_annotations:
                     return False
             
             return True

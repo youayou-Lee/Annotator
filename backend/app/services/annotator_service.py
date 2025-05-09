@@ -68,35 +68,30 @@ class AnnotatorService:
             doc_dir = os.path.join(self.output_dir, task_id)
             os.makedirs(doc_dir, exist_ok=True)
             
-            # 获取原始文档数据
-            task_file = os.path.join("data", "tasks", f"{task_id}.json")
-            if not os.path.exists(task_file):
-                print(f"Warning: Task file {task_file} not found during save_annotation for task {task_id}.")
-                annotation_data = annotation
-            else:
-                # 构建完整的标注数据
-                annotation_data = annotation
+            # 文件名简化为单一的任务级别JSON文件
+            annotation_path = os.path.join(doc_dir, f"{task_id}_annotations.json")
             
-            annotation_path = os.path.join(doc_dir, f"{document_id}_annotation.json")
+            # 初始化最终要保存的数据
+            final_annotations = {}
             
             # 检查是否已有标注文件，如果有，合并而不是覆盖
             if os.path.exists(annotation_path):
                 try:
                     with open(annotation_path, 'r', encoding='utf-8') as f:
-                        existing_annotation = json.load(f)
-                        # 深度合并现有标注和新标注
-                        for field_name, value in annotation.items():
-                            existing_annotation[field_name] = value
-                    annotation_data = existing_annotation
+                        final_annotations = json.load(f)
                 except Exception as e:
-                    print(f"读取已有标注失败: {str(e)}，将使用新标注")
+                    print(f"读取已有标注失败: {str(e)}，将创建新的标注文件")
             
+            # 使用document_id作为键，将当前标注内容保存到总的标注文件中
+            final_annotations[document_id] = annotation
+            
+            # 保存合并后的标注到单一文件
             with open(annotation_path, 'w', encoding='utf-8') as f:
-                json.dump(annotation_data, f, ensure_ascii=False, indent=2)
+                json.dump(final_annotations, f, ensure_ascii=False, indent=2)
             
-            # 打印保存成功信息和保存的数据，以便调试
+            # 打印保存成功信息
             print(f"标注保存成功：{annotation_path}")
-            print(f"保存的数据：{json.dumps(annotation_data, ensure_ascii=False)[:200]}...")
+            print(f"保存的文档ID：{document_id}")
             
             return annotation_path
             
@@ -142,13 +137,20 @@ class AnnotatorService:
             if original_document_content:
                 doc_to_merge_into = json.loads(json.dumps(original_document_content))
 
-            annotation_file_path = os.path.join(self.output_dir, task_id, f"{document_id}_annotation.json")
+            # 使用新的合并文件路径
+            annotation_file_path = os.path.join(self.output_dir, task_id, f"{task_id}_annotations.json")
             
             if not os.path.exists(annotation_file_path):
                 return doc_to_merge_into 
             
+            # 读取所有标注
             with open(annotation_file_path, 'r', encoding='utf-8') as f:
-                annotation_data = json.load(f)
+                all_annotations = json.load(f)
+            
+            # 获取特定文档的标注
+            annotation_data = all_annotations.get(document_id)
+            if not annotation_data:
+                return doc_to_merge_into
                 
             if doc_to_merge_into is None:
                 return annotation_data
@@ -167,8 +169,8 @@ class AnnotatorService:
                 
         except Exception as e:
             print(f"加载标注或合并失败: {str(e)}")
-            return None 
-    
+            return None
+
     def _merge_nested_fields(self, target: Dict[str, Any], source: Dict[str, Any]) -> None:
         """递归合并嵌套字段
         
