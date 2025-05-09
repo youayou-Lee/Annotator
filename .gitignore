@@ -13,5 +13,5 @@ exampleData/
 backend\data\raw\example.json
 backend\data\merged_data
 /TODO.md
-
+/test/
 clean.bat

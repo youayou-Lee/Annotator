@@ -28,6 +28,7 @@ class JsonChecker:
         
     def _validate_model_has_id(self):
         """验证模型是否包含id字段 (Pydantic v2)"""
+        print(f"模型 {self.model.__name__} 的字段: {self.model.model_fields}")
         if "id" not in self.model.model_fields:
             # 不强制要求模型包含id字段，将在填充模板时自动添加
             print(f"提示: 模型 {self.model.__name__} 没有id字段，将在填充模板时自动添加")
@@ -143,34 +144,22 @@ class JsonChecker:
                 # 尝试从用户数据中获取值
                 if field_name in item:
                     user_value = item[field_name]
-                    # 特殊处理id字段，如果为空则生成随机id
-                    if field_name == "id" and (user_value is None or user_value == ""):
-                        user_value = generate_random_id(16)
-                        
-                    # 检查类型是否匹配
-                    try:
-                        # 跳过 Any 类型的检查
-                        if field_type is not Any:
-                            # 更健壮的类型检查
-                            expected_type = field_type
-
-                            # 处理 Optional 类型
-                            if hasattr(field_type, "__origin__") and field_type.__origin__ is Union:
-                                expected_type = field_type.__args__[0]  # 取第一个非None类型
-
-                            # 检查类型
-                            if not isinstance(user_value, expected_type):
-                                # 尝试类型转换
-                                try:
-                                    user_value = expected_type(user_value)
-                                except (TypeError, ValueError):
-                                    # 类型转换失败，使用默认值
-                                    filled_item[field_name] = default_value
-                                    continue
-
+                    
+                    # 特殊处理 List[str] 等泛型类型，直接使用用户提供的值
+                    if hasattr(field_type, "__origin__") and field_type.__origin__ is list:
                         filled_item[field_name] = user_value
-                    except Exception:
-                        # 类型检查失败，使用默认值
+                        continue  # 跳过后续检查
+
+                    # 检查基本类型（str/int/float/bool）
+                    try:
+                        if field_type is not Any:
+                            # 处理基本类型
+                            if field_type in (str, int, float, bool):
+                                if not isinstance(user_value, field_type):
+                                    user_value = field_type(user_value)  # 尝试类型转换
+                            # 其他情况（如嵌套模型）保持不变
+                        filled_item[field_name] = user_value
+                    except (TypeError, ValueError):
                         filled_item[field_name] = default_value
                 else:
                     # 字段不存在于用户数据中，使用默认值
@@ -179,35 +168,21 @@ class JsonChecker:
             filled_data.append(filled_item)
 
         return filled_data
-
     def _get_default_for_type(self, field_type: Type) -> Any:
-        """根据字段类型返回合理的默认值，保留嵌套结构 (Pydantic v2)"""
+        """根据字段类型返回合理的默认值"""
         # 处理 Optional/Union 类型
-        if hasattr(field_type, "__origin__") and field_type.__origin__ is Union:
-            # 取第一个非None类型
-            for t in field_type.__args__:
-                if t is not type(None):  # noqa
-                    return self._get_default_for_type(t)
-            return None
-
-        # 处理泛型容器类型
         if hasattr(field_type, "__origin__"):
-            origin_type = field_type.__origin__
-
-            if origin_type is list:
-                element_type = field_type.__args__[0] if field_type.__args__ else str
-                return [self._get_default_for_type(element_type)]
-
-            elif origin_type is dict:
-                key_type = field_type.__args__[0] if len(field_type.__args__) > 0 else str
-                value_type = field_type.__args__[1] if len(field_type.__args__) > 1 else Any
-                return {self._get_default_for_type(key_type): self._get_default_for_type(value_type)}
-
-            # 其他泛型类型
-            try:
-                return origin_type()
-            except Exception:
+            if field_type.__origin__ is Union:
+                for t in field_type.__args__:
+                    if t is not type(None):
+                        return self._get_default_for_type(t)
                 return None
+            # 处理 List 类型（默认返回空列表）
+            elif field_type.__origin__ is list:
+                return []
+            # 其他容器类型（如 Dict）
+            elif field_type.__origin__ is dict:
+                return {}
 
         # 基本类型默认值
         if field_type is str:
@@ -218,24 +193,7 @@ class JsonChecker:
             return 0.0
         elif field_type is bool:
             return False
-        elif field_type is list:
-            return [""]
-        elif field_type is dict:
-            return {}
-
-        # 处理嵌套Pydantic模型 (Pydantic v2)
-        try:
-            if isinstance(field_type, type) and issubclass(field_type, BaseModel):
-                # 递归创建嵌套模型的默认结构
-                nested_default = {}
-                # Pydantic v2
-                for name, model_field in field_type.model_fields.items():
-                    nested_default[name] = self._get_default_for_type(model_field.annotation)
-                return nested_default
-        except TypeError:
-            pass
-
-        # 默认返回None
+        # 其他情况返回 None
         return None
 
     def process_file(self, json_file: Path, mode: str = 'validate') -> List[Dict[str, Any]]:
@@ -268,15 +226,3 @@ class JsonChecker:
         else:
             raise ValueError(f"未知模式: {mode}")
 
-def formatting_verrification(json_file: Path, temp_py:Path, mode: str = 'validate') -> List[Dict[str, Any]]:
-    """
-    校验JSON/JSONL文件格式
-    
-    :param json_file: JSON/JSONL文件路径
-    :param temp_file: 模板文件路径
-    :param mode: 处理模式 ('validate' 或 'fill')
-    :return: 处理后的数据列表
-    """
-    checker = JsonChecker(model_file=Path(temp_py))
-
-    return checker.process_file(Path(temp_jsonl), mode=mode)
