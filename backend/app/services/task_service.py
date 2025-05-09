@@ -102,21 +102,46 @@ class TaskService:
             # 如果有错误，抛出所有错误信息
             if error_messages:
                 raise ValueError("\n".join(error_messages))
-        
-        # 如果提供了自定义标注字段配置，使用自定义配置构造TaskConfig
+          # 如果提供了自定义标注字段配置，使用自定义配置构造TaskConfig
         task_config = TaskConfig()
         if task_data.get('config'):
-            task_config = TaskConfig(fields=[{
-                "key": field['key'],
-                "type": field['type']
-            } for field in task_data['config']])
+            # 处理自定义配置，确保number类型有默认的最小值和最大值
+            fields = []
+            for field in task_data['config']:
+                field_config = {
+                    "key": field['key'],
+                    "type": field['type']
+                }
+                
+                # 如果是number类型，确保有最小值和最大值
+                if field['type'] == 'number':
+                    # 如果提供了最小值和最大值，使用提供的值，否则设置默认值
+                    field_config["minValue"] = field.get('minValue', 0)  # 默认最小值为0
+                    field_config["maxValue"] = field.get('maxValue', 100000)  # 默认最大值为100000
+                
+                # 复制其他可能的字段属性
+                for attr in ['isMultiple', 'paths', 'description']:
+                    if attr in field:
+                        field_config[attr] = field[attr]
+                
+                fields.append(field_config)
+            
+            task_config = TaskConfig(fields=fields)
         # 如果没有提供config但提供了template，则使用模板中的配置
         elif task_data.get('template'):
             template_path = os.path.join(self.task_templates_dir, task_data['template'])
             if os.path.exists(template_path):
                 with open(template_path, 'r', encoding='utf-8') as f:
                     template_data = json.load(f)
-                    task_config = TaskConfig(fields=template_data.get('need_be_marked_list', []))
+                    template_fields = template_data.get('need_be_marked_list', [])
+                    
+                    # 处理模板字段，确保number类型有最小值和最大值
+                    for field in template_fields:
+                        if field.get('type') == 'number' and ('minValue' not in field or 'maxValue' not in field):
+                            field['minValue'] = field.get('minValue', 0)
+                            field['maxValue'] = field.get('maxValue', 100000)
+                    
+                    task_config = TaskConfig(fields=template_fields)
 
         # 创建任务对象
         task = Task(
@@ -203,10 +228,6 @@ class TaskService:
             task = self.get_task(task_id)
             if not task:
                 raise ValueError(f"任务不存在: {task_id}")
-            
-            # 验证文档ID是否在任务的document_ids中
-            if hasattr(task, 'document_ids') and document_id not in task.document_ids:
-                print(f"提示: 文档ID {document_id} 不在任务的document_ids列表中，将从文件中查找")
             
             # 从文件中获取文档列表
             documents = self.get_task_documents(task_id)

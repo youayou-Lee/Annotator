@@ -2,7 +2,9 @@
     "need_be_marked_list": [
         {
             "key": "罚金",
-            "type": "number"
+            "type": "number",
+            "minValue": 0,
+            "maxValue": 520
         },
         {
             "key": "是否缓刑",

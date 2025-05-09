@@ -259,8 +259,7 @@
             placeholder="请选择任务模板"
           />
         </el-form-item>
-        
-        <el-form-item v-if="createTaskForm.useCustomConfig" label="可标注字段">
+          <el-form-item v-if="createTaskForm.useCustomConfig" label="可标注字段">
           <el-table :data="createTaskForm.config" style="width: 100%">
             <el-table-column label="字段路径">
               <template #default="{ row }">
@@ -282,12 +281,35 @@
             </el-table-column>
             <el-table-column label="字段类型" width="150">
               <template #default="{ row }">
-                <el-select v-model="row.type" placeholder="请选择字段类型">
+                <el-select v-model="row.type" placeholder="请选择字段类型" @change="handleTypeChange(row)">
                   <el-option label="文本" value="string" />
                   <el-option label="数字" value="number" />
                   <el-option label="布尔值" value="boolean" />
                   <el-option label="数组" value="array" />
                 </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="数值范围" width="200" v-if="hasNumberTypeField">
+              <template #default="{ row }">
+                <div v-if="row.type === 'number'" style="display: flex; align-items: center;">
+                  <el-input-number 
+                    v-model="row.min" 
+                    :min="-Infinity" 
+                    :max="row.max" 
+                    size="small" 
+                    style="width: 90px;"
+                    placeholder="最小值" 
+                  />
+                  <span style="margin: 0 5px;">-</span>
+                  <el-input-number 
+                    v-model="row.max" 
+                    :min="row.min" 
+                    size="small" 
+                    style="width: 90px;"
+                    placeholder="最大值" 
+                  />
+                </div>
+                <span v-else>-</span>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="100">
@@ -655,6 +677,14 @@ const createTask = async () => {
         ElMessage.warning('请添加至少一个可标注字段')
         return
       }
+      // 验证数字类型的字段范围设置
+      for (const field of createTaskForm.value.config) {
+        if (field.type === 'number') {
+          // 如果未设置，使用默认值
+          if (field.min === undefined) field.min = 0
+          if (field.max === undefined) field.max = 100
+        }
+      }
       taskData.config = createTaskForm.value.config
     } else {
       if (!createTaskForm.value.template) {
@@ -763,6 +793,26 @@ const loadTasks = async () => {
   }
 }
 
+// 添加计算属性，用于判断是否有数字类型的字段
+const hasNumberTypeField = ref(false)
+
+// 处理字段类型变化
+const handleTypeChange = (row: any) => {
+  // 当选择数字类型时，初始化最小值和最大值
+  if (row.type === 'number') {
+    if (row.min === undefined) row.min = 0
+    if (row.max === undefined) row.max = 100
+  }
+  
+  // 检查是否有数字类型字段
+  updateHasNumberTypeField()
+}
+
+// 更新是否有数字类型字段的状态
+const updateHasNumberTypeField = () => {
+  hasNumberTypeField.value = createTaskForm.value.config.some(item => item.type === 'number')
+}
+
 // 添加字段
 const addField = () => {
   createTaskForm.value.config.push({ key: '', type: '' })
@@ -771,6 +821,9 @@ const addField = () => {
 // 删除字段
 const removeField = (index: number) => {
   createTaskForm.value.config.splice(index, 1)
+  
+  // 删除后更新是否有数字类型字段的状态
+  updateHasNumberTypeField()
 }
 
 // 生命周期

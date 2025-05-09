@@ -63,41 +63,85 @@ class AnnotatorService:
     
     def save_annotation(self, task_id: str, document_id: str, annotation: Dict[str, Any]) -> Optional[str]:
         """保存标注结果"""
-        try:
+        # try:
             # 创建标注目录
-            doc_dir = os.path.join(self.output_dir, task_id)
-            os.makedirs(doc_dir, exist_ok=True)
+        doc_dir = os.path.join(self.output_dir, task_id)
+        os.makedirs(doc_dir, exist_ok=True)
+        
+        # 首先加载任务配置，检查数值类型字段的范围
+        task_config_path = os.path.join(os.path.dirname(self.output_dir), "tasks", f"{task_id}.json")
+        task_config = None
+        if os.path.exists(task_config_path):
+            try:
+                with open(task_config_path, 'r', encoding='utf-8') as f:
+                    task_config = json.load(f)
+            except Exception as e:
+                print(f"读取任务配置失败: {str(e)}，将跳过范围验证")        
+        for field_config in task_config["config"]:
+            if field_config["type"] == "number":
+                field_key = field_config["key"]
+                print(f"检查字段配置: {field_config}")
+                
+                # 使用递归查找方法来处理嵌套结构
+                container, field_name, found = self._find_field_in_document(annotation, field_key)
+                
+                # 确保字段配置中有最小值和最大值，如果没有则设置默认值
+                min_value = field_config.get("minValue", 0)  # 默认最小值为0
+                max_value = field_config.get("maxValue", 100000)  # 默认最大值为100000
+                print(f"字段 '{field_key}' 的范围限制: 最小值={min_value}, 最大值={max_value}")
+                
+                if not found:
+                    print(f"警告: 标注中未找到字段 '{field_key}'")
+                    continue
+                
+                value = container[field_name]
+                print(f"验证字段 '{field_key}' 的值 '{value}'")
+                
+                # 检查是否为数值类型
+                if not isinstance(value, (int, float)):
+                    print(f"警告: 字段 '{field_key}' 值 '{value}' 不是有效的数值类型")
+                    continue
+                    
+                # 检查最小值 (始终会有值)
+                if value < min_value:
+                    print(f"错误: 字段 '{field_key}' 值 '{value}' 小于最小值 {min_value}")
+                    return None
+                    
+                # 检查最大值 (始终会有值)
+                if value > max_value:
+                    print(f"错误: 字段 '{field_key}' 值 '{value}' 大于最大值 {max_value}")
+                    return None
+        
+        # 文件名简化为单一的任务级别JSON文件
+        annotation_path = os.path.join(doc_dir, f"{task_id}_annotations.json")
+        
+        # 初始化最终要保存的数据
+        final_annotations = {}
+        
+        # 检查是否已有标注文件，如果有，合并而不是覆盖
+        if os.path.exists(annotation_path):
+            try:
+                with open(annotation_path, 'r', encoding='utf-8') as f:
+                    final_annotations = json.load(f)
+            except Exception as e:
+                print(f"读取已有标注失败: {str(e)}，将创建新的标注文件")
+        
+        # 使用document_id作为键，将当前标注内容保存到总的标注文件中
+        final_annotations[document_id] = annotation
+        
+        # 保存合并后的标注到单一文件
+        with open(annotation_path, 'w', encoding='utf-8') as f:
+            json.dump(final_annotations, f, ensure_ascii=False, indent=2)
+        
+        # 打印保存成功信息
+        print(f"标注保存成功：{annotation_path}")
+        print(f"保存的文档ID：{document_id}")
+        
+        return annotation_path
             
-            # 文件名简化为单一的任务级别JSON文件
-            annotation_path = os.path.join(doc_dir, f"{task_id}_annotations.json")
-            
-            # 初始化最终要保存的数据
-            final_annotations = {}
-            
-            # 检查是否已有标注文件，如果有，合并而不是覆盖
-            if os.path.exists(annotation_path):
-                try:
-                    with open(annotation_path, 'r', encoding='utf-8') as f:
-                        final_annotations = json.load(f)
-                except Exception as e:
-                    print(f"读取已有标注失败: {str(e)}，将创建新的标注文件")
-            
-            # 使用document_id作为键，将当前标注内容保存到总的标注文件中
-            final_annotations[document_id] = annotation
-            
-            # 保存合并后的标注到单一文件
-            with open(annotation_path, 'w', encoding='utf-8') as f:
-                json.dump(final_annotations, f, ensure_ascii=False, indent=2)
-            
-            # 打印保存成功信息
-            print(f"标注保存成功：{annotation_path}")
-            print(f"保存的文档ID：{document_id}")
-            
-            return annotation_path
-            
-        except Exception as e:
-            print(f"保存标注失败: {str(e)}")
-            return None
+        # except Exception as e:
+        #     print(f"保存标注失败: {str(e)}")
+        #     return None
 
     def _get_path_to_field(self, doc: Dict[str, Any], field_name: str, current_path: List[str] = None) -> List[str]:
         """获取文档中字段的路径

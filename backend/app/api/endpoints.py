@@ -321,14 +321,14 @@ async def save_annotation(
     annotation: Dict[str, Any],
     annotator_service: AnnotatorService = Depends(get_annotator_service)
 ):
-    try:
-        success = annotator_service.save_annotation(task_id, document_id, annotation)
-        if not success:
-            raise HTTPException(status_code=404, detail="Task not found")
-        return {"status": "success"}
-    except Exception as e:
-        print(f"保存标注结果失败: {str(e)}")  # 添加日志输出
-        raise HTTPException(status_code=500, detail=str(e))
+    # try:
+    success = annotator_service.save_annotation(task_id, document_id, annotation)
+    if not success:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"status": "success"}
+    # except Exception as e:
+    #     print(f"保存标注结果失败: {str(e)}")  # 添加日志输出
+    #     raise HTTPException(status_code=500, detail=str(e))
 
 # 获取标注结果
 @router.get("/tasks/{task_id}/annotations/{document_id}")
@@ -340,7 +340,6 @@ async def get_annotation(
 ):
     """获取标注结果，并与原始文档合并"""
     try:
-        print(f"开始获取文档 {document_id} 的标注...")
         
         # First, get the original document content
         original_document = task_service.get_task_document(task_id, document_id)
@@ -354,7 +353,6 @@ async def get_annotation(
         # 检查标注文件是否存在
         annotation_path = os.path.join("data", "annotations", task_id, f"{document_id}_annotation.json")
         annotation_exists = os.path.exists(annotation_path)
-        print(f"标注文件路径: {annotation_path}, 是否存在: {annotation_exists}")
         
         if annotation_exists:
             with open(annotation_path, 'r', encoding='utf-8') as f:

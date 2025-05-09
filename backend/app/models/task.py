@@ -40,6 +40,8 @@ class FieldConfig(BaseModel):
     paths: List[str] = Field(default_factory=list, description="字段在文档中的所有可能路径")
     description: str = Field(default="", description="字段描述")
     isMultiple: bool = Field(default=False, description="是否是多值字段")
+    minValue: Optional[int] = Field(default=None, description="最小值（仅当类型为number时有效）")
+    maxValue: Optional[int] = Field(default=None, description="最大值（仅当类型为number时有效）")
 
 class TaskConfig(BaseModel):
     """任务配置模型"""
@@ -47,17 +49,32 @@ class TaskConfig(BaseModel):
 
     def get_beMarked(self) -> List[Dict[str, Any]]:
         """获取待标注的字段配置列表"""
-        return [{
-            "key": field.key,
-            "type": field.type,
-            "isMultiple": field.isMultiple,
-            "paths": field.paths
-        } for field in self.fields]
+        result = []
+        for field in self.fields:
+            field_data = {
+                "key": field.key,
+                "type": field.type,
+                "isMultiple": field.isMultiple,
+                "paths": field.paths,
+                "description": field.description
+            }              
+            if field.type == "number":
+                # 直接传递原始的最小值和最大值
+                field_data["minValue"] = field.minValue
+                field_data["maxValue"] = field.maxValue
+            result.append(field_data)
+        return result
 
     def set_default_template(self) -> List[Dict[str, Any]]:
-        """加载默认模板"""
+        """加载默认模板，并为数字类型字段设置默认范围"""
         with open("data/task_templates/template.json", "r", encoding="utf-8") as f:
-            return json.load(f)["need_be_marked_list"]
+            template_data = json.load(f)["need_be_marked_list"]
+        
+        for field_item in template_data:
+            if field_item.get("type") == "number":
+                field_item.setdefault("minValue", 0)
+                field_item.setdefault("maxValue", 100)
+        return template_data
 
     @model_validator(mode="after")
     def set_default_fields(self) -> "TaskConfig":

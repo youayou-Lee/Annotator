@@ -34,7 +34,6 @@ class FileService:
             try:
                 with open(file_path, 'wb') as f:
                     f.write(content)
-                print(f"文件写入成功")  # 添加日志
             except Exception as e:
                 print(f"文件写入失败: {str(e)}")  # 添加日志
                 raise Exception(f"文件写入失败: {str(e)}")
@@ -50,7 +49,6 @@ class FileService:
                     if not content.strip():
                         raise Exception("文件内容为空")
                     json.loads(content)  # 验证JSON格式
-                print(f"文件内容验证成功")  # 添加日志
             except json.JSONDecodeError as e:
                 print(f"JSON格式验证失败: {str(e)}")  # 添加日志
                 raise Exception(f"文件不是有效的JSON格式: {str(e)}")
