@@ -1,7 +1,7 @@
-# PowerShell è„šæœ¬ï¼šä¸€é”®å¯åŠ¨æ–‡ä¹¦æ ‡æ³¨ç³»ç»Ÿå‰ç«¯å’Œåç«¯
-# æ‰§è¡Œç­–ç•¥è®¾ç½®ï¼šå¦‚æœé‡åˆ°æ— æ³•æ‰§è¡Œçš„é—®é¢˜ï¼Œè¯·å…ˆåœ¨ç®¡ç†å‘˜PowerShellä¸­è¿è¡Œ: Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+# PowerShell ½Å±¾£ºÒ»¼üÆô¶¯ÎÄÊé±ê×¢ÏµÍ³Ç°¶ËºÍºó¶Ë
+# Ö´ĞĞ²ßÂÔÉèÖÃ£ºÈç¹ûÓöµ½ÎŞ·¨Ö´ĞĞµÄÎÊÌâ£¬ÇëÏÈÔÚ¹ÜÀíÔ±PowerShellÖĞÔËĞĞ: Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 
-# é…ç½®é¢œè‰²å’Œæ ¼å¼åŒ–è¾“å‡º
+# ÅäÖÃÑÕÉ«ºÍ¸ñÊ½»¯Êä³ö
 function Write-ColorOutput {
     param(
         [Parameter(Mandatory = $true)]
@@ -20,108 +20,113 @@ function Write-ColorOutput {
 function Show-Banner {
     Write-Output ""
     Write-ColorOutput "=========================================" "Cyan"
-    Write-ColorOutput "       æ–‡ä¹¦æ ‡æ³¨ç³»ç»Ÿå¯åŠ¨å·¥å…·" "Cyan"
+    Write-ColorOutput "       ÎÄÊé±ê×¢ÏµÍ³Æô¶¯¹¤¾ß" "Cyan"
     Write-ColorOutput "=========================================" "Cyan"
     Write-Output ""
 }
 
-# æ˜¾ç¤ºå¯åŠ¨æ¨ªå¹…
+# ÏÔÊ¾Æô¶¯ºá·ù
 Show-Banner
 
-# é…ç½®è·¯å¾„å’Œç¯å¢ƒ
-$rootDir = Split-Path -Parent $PSScriptRoot
+# ÅäÖÃÂ·¾¶ºÍ»·¾³
+# »ñÈ¡µ±Ç°½Å±¾ËùÔÚÄ¿Â¼×÷Îª¸ùÄ¿Â¼
+$rootDir = $PSScriptRoot
+if (-not $rootDir) {
+    $rootDir = (Get-Location).Path
+}
+Write-ColorOutput "ÏîÄ¿¸ùÄ¿Â¼: $rootDir" "Yellow"
 $frontendDir = Join-Path -Path $rootDir -ChildPath "frontend"
 $backendDir = Join-Path -Path $rootDir -ChildPath "backend"
 
-# æ£€æŸ¥ç›®å½•æ˜¯å¦å­˜åœ¨
+# ¼ì²éÄ¿Â¼ÊÇ·ñ´æÔÚ
 if (-not (Test-Path -Path $frontendDir)) {
-    Write-ColorOutput "é”™è¯¯ï¼šå‰ç«¯ç›®å½•ä¸å­˜åœ¨ ($frontendDir)" "Red"
+    Write-ColorOutput "´íÎó£ºÇ°¶ËÄ¿Â¼²»´æÔÚ ($frontendDir)" "Red"
     exit 1
 }
 
 if (-not (Test-Path -Path $backendDir)) {
-    Write-ColorOutput "é”™è¯¯ï¼šåç«¯ç›®å½•ä¸å­˜åœ¨ ($backendDir)" "Red"
+    Write-ColorOutput "´íÎó£ººó¶ËÄ¿Â¼²»´æÔÚ ($backendDir)" "Red"
     exit 1
 }
 
-# æ¿€æ´» Conda ç¯å¢ƒ
-Write-ColorOutput "æ­£åœ¨æ¿€æ´» Conda ç¯å¢ƒ (annotator)..." "Yellow"
+# ¼¤»î Conda »·¾³
+Write-ColorOutput "ÕıÔÚ¼¤»î Conda »·¾³ (annotator)..." "Yellow"
 conda activate annotator
 
-# æ£€æŸ¥ Conda ç¯å¢ƒæ˜¯å¦æ¿€æ´»æˆåŠŸ
+# ¼ì²é Conda »·¾³ÊÇ·ñ¼¤»î³É¹¦
 if ($LASTEXITCODE -ne 0) {
-    Write-ColorOutput "é”™è¯¯ï¼šæ— æ³•æ¿€æ´» Conda ç¯å¢ƒï¼Œè¯·ç¡®ä¿å·²å®‰è£… Conda å¹¶åˆ›å»ºäº† 'annotator' ç¯å¢ƒ" "Red"
+    Write-ColorOutput "´íÎó£ºÎŞ·¨¼¤»î Conda »·¾³£¬ÇëÈ·±£ÒÑ°²×° Conda ²¢´´½¨ÁË 'annotator' »·¾³" "Red"
     exit 1
 }
 
-# å¯åŠ¨åç«¯æœåŠ¡
-Write-ColorOutput "æ­£åœ¨å¯åŠ¨åç«¯æœåŠ¡..." "Yellow"
+# Æô¶¯ºó¶Ë·şÎñ
+Write-ColorOutput "ÕıÔÚÆô¶¯ºó¶Ë·şÎñ..." "Yellow"
 $backendJob = Start-Job -ScriptBlock {
     param($dir)
     cd $dir
     python -m app.main
 } -ArgumentList $backendDir
 
-# ç­‰å¾…åç«¯å¯åŠ¨
-Write-ColorOutput "ç­‰å¾…åç«¯æœåŠ¡å¯åŠ¨ (5ç§’)..." "Yellow"
+# µÈ´ıºó¶ËÆô¶¯
+Write-ColorOutput "µÈ´ıºó¶Ë·şÎñÆô¶¯ (5Ãë)..." "Yellow"
 Start-Sleep -Seconds 5
 
-# æ£€æŸ¥åç«¯æ˜¯å¦æˆåŠŸå¯åŠ¨
+# ¼ì²éºó¶ËÊÇ·ñ³É¹¦Æô¶¯
 $backendState = Receive-Job -Job $backendJob -Keep
 if ($null -eq $backendState) {
-    Write-ColorOutput "åç«¯æœåŠ¡å¯åŠ¨ä¸­..." "Green"
+    Write-ColorOutput "ºó¶Ë·şÎñÆô¶¯ÖĞ..." "Green"
 } else {
-    Write-ColorOutput "åç«¯æœåŠ¡è¾“å‡ºï¼š" "Cyan"
+    Write-ColorOutput "ºó¶Ë·şÎñÊä³ö£º" "Cyan"
     Write-Output $backendState
 }
 
-# å¯åŠ¨å‰ç«¯æœåŠ¡
-Write-ColorOutput "æ­£åœ¨å¯åŠ¨å‰ç«¯æœåŠ¡..." "Yellow"
+# Æô¶¯Ç°¶Ë·şÎñ
+Write-ColorOutput "ÕıÔÚÆô¶¯Ç°¶Ë·şÎñ..." "Yellow"
 $frontendJob = Start-Job -ScriptBlock {
     param($dir)
     cd $dir
     npm run dev
 } -ArgumentList $frontendDir
 
-# ç­‰å¾…å‰ç«¯å¯åŠ¨
-Write-ColorOutput "ç­‰å¾…å‰ç«¯æœåŠ¡å¯åŠ¨ (5ç§’)..." "Yellow"
+# µÈ´ıÇ°¶ËÆô¶¯
+Write-ColorOutput "µÈ´ıÇ°¶Ë·şÎñÆô¶¯ (5Ãë)..." "Yellow"
 Start-Sleep -Seconds 5
 
-# æ£€æŸ¥å‰ç«¯æ˜¯å¦æˆåŠŸå¯åŠ¨
+# ¼ì²éÇ°¶ËÊÇ·ñ³É¹¦Æô¶¯
 $frontendState = Receive-Job -Job $frontendJob -Keep
 if ($null -eq $frontendState) {
-    Write-ColorOutput "å‰ç«¯æœåŠ¡å¯åŠ¨ä¸­..." "Green"
+    Write-ColorOutput "Ç°¶Ë·şÎñÆô¶¯ÖĞ..." "Green"
 } else {
-    Write-ColorOutput "å‰ç«¯æœåŠ¡è¾“å‡ºï¼š" "Cyan"
+    Write-ColorOutput "Ç°¶Ë·şÎñÊä³ö£º" "Cyan"
     Write-Output $frontendState
 }
 
-# æ˜¾ç¤ºæœåŠ¡çŠ¶æ€
+# ÏÔÊ¾·şÎñ×´Ì¬
 Write-Output ""
 Write-ColorOutput "=========================================" "Green"
-Write-ColorOutput "       æœåŠ¡çŠ¶æ€" "Green"
+Write-ColorOutput "       ·şÎñ×´Ì¬" "Green"
 Write-ColorOutput "=========================================" "Green"
-Write-ColorOutput "åç«¯æœåŠ¡: è¿è¡Œä¸­ (http://localhost:8000)" "Green"
-Write-ColorOutput "å‰ç«¯æœåŠ¡: è¿è¡Œä¸­ (http://localhost:3000)" "Green"
+Write-ColorOutput "ºó¶Ë·şÎñ: ÔËĞĞÖĞ (http://localhost:8000)" "Green"
+Write-ColorOutput "Ç°¶Ë·şÎñ: ÔËĞĞÖĞ (http://localhost:3000)" "Green"
 Write-ColorOutput "=========================================" "Green"
 Write-Output ""
-Write-ColorOutput "ç³»ç»Ÿå·²å¯åŠ¨! è¯·åœ¨æµè§ˆå™¨ä¸­è®¿é—®: http://localhost:3000" "Cyan"
-Write-ColorOutput "æŒ‰ Ctrl+C åœæ­¢æ‰€æœ‰æœåŠ¡" "Yellow"
+Write-ColorOutput "ÏµÍ³ÒÑÆô¶¯! ÇëÔÚä¯ÀÀÆ÷ÖĞ·ÃÎÊ: http://localhost:3000" "Cyan"
+Write-ColorOutput "°´ Ctrl+C Í£Ö¹ËùÓĞ·şÎñ" "Yellow"
 Write-Output ""
 
-# ç­‰å¾…ç”¨æˆ·æŒ‰ä¸‹ Ctrl+C
+# µÈ´ıÓÃ»§°´ÏÂ Ctrl+C
 try {
-    # æ˜¾ç¤ºåç«¯æ—¥å¿—
+    # ÏÔÊ¾ºó¶ËÈÕÖ¾
     while ($true) {
         $backendOutput = Receive-Job -Job $backendJob -Keep
         if ($null -ne $backendOutput) {
-            Write-ColorOutput "[åç«¯] " "DarkGray" -NoNewline
+            Write-ColorOutput "[ºó¶Ë] " "DarkGray" -NoNewline
             Write-Output $backendOutput
         }
         
         $frontendOutput = Receive-Job -Job $frontendJob -Keep
         if ($null -ne $frontendOutput) {
-            Write-ColorOutput "[å‰ç«¯] " "DarkGray" -NoNewline
+            Write-ColorOutput "[Ç°¶Ë] " "DarkGray" -NoNewline
             Write-Output $frontendOutput
         }
         
@@ -129,26 +134,26 @@ try {
     }
 }
 catch {
-    # å½“ç”¨æˆ·æŒ‰ Ctrl+C æ—¶
+    # µ±ÓÃ»§°´ Ctrl+C Ê±
     Write-Output ""
-    Write-ColorOutput "æ­£åœ¨åœæ­¢æœåŠ¡..." "Yellow"
+    Write-ColorOutput "ÕıÔÚÍ£Ö¹·şÎñ..." "Yellow"
     
-    # åœæ­¢åç«¯ä½œä¸š
+    # Í£Ö¹ºó¶Ë×÷Òµ
     if ($null -ne $backendJob) {
         Stop-Job -Job $backendJob
         Remove-Job -Job $backendJob -Force
     }
     
-    # åœæ­¢å‰ç«¯ä½œä¸š
+    # Í£Ö¹Ç°¶Ë×÷Òµ
     if ($null -ne $frontendJob) {
         Stop-Job -Job $frontendJob
         Remove-Job -Job $frontendJob -Force
     }
     
-    Write-ColorOutput "æ‰€æœ‰æœåŠ¡å·²åœæ­¢" "Green"
+    Write-ColorOutput "ËùÓĞ·şÎñÒÑÍ£Ö¹" "Green"
 }
 finally {
-    # æ¸…ç†æ‰€æœ‰æ®‹ä½™ä½œä¸š
+    # ÇåÀíËùÓĞ²ĞÓà×÷Òµ
     Get-Job | Where-Object { $_.State -ne 'Completed' } | Stop-Job
     Get-Job | Remove-Job -Force
 } 
