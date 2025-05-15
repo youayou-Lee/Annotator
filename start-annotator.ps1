@@ -107,20 +107,26 @@ if ($null -eq $backendState) {
 
 # 只有后端没问题才启动前端
 if (-not $backendError) {
+    # 创建自定义启动命令，避免CJS警告
+    $npmRunCommand = @"
+cd "$frontendDir"
+$env:NODE_OPTIONS="--no-warnings"
+npm run dev
+"@
+    $tempScriptPath = Join-Path -Path $env:TEMP -ChildPath "run-frontend.ps1"
+    $npmRunCommand | Out-File -FilePath $tempScriptPath -Encoding utf8
+
     # 启动前端服务
     Write-ColorOutput "正在启动前端服务..." "Yellow"
     $frontendJob = Start-Job -ScriptBlock {
-        param($dir)
+        param($scriptPath)
         try {
-            Set-Location $dir
-            # 使用 ESM 模式启动 Vite，避免 CJS 警告
-            $env:NODE_OPTIONS = "--conditions=development"
-            npm run dev
+            powershell.exe -ExecutionPolicy Bypass -File $scriptPath
         } catch {
             Write-Output "前端服务启动失败: $_"
             exit 1
         }
-    } -ArgumentList $frontendDir
+    } -ArgumentList $tempScriptPath
 
     # 等待前端启动
     Write-ColorOutput "等待前端服务启动 (8秒)..." "Yellow"
@@ -171,7 +177,7 @@ if (-not $backendError) {
                 }
                 
                 $frontendOutput = Receive-Job -Job $frontendJob -Keep
-                if ($null -ne $frontendOutput) {
+                if ($null -ne $frontendOutput -and -not ($frontendOutput -like "*CJS build*")) {
                     Write-ColorOutput "[前端] " "DarkGray" -NoNewline
                     Write-Output $frontendOutput
                 }
@@ -196,6 +202,11 @@ if (-not $backendError) {
                 Remove-Job -Job $frontendJob -Force
             }
             
+            # 删除临时脚本
+            if (Test-Path $tempScriptPath) {
+                Remove-Item $tempScriptPath -Force
+            }
+            
             Write-ColorOutput "所有服务已停止" "Green"
         }
     } else {
@@ -204,6 +215,11 @@ if (-not $backendError) {
             Stop-Job -Job $backendJob
             Remove-Job -Job $backendJob -Force
             Write-ColorOutput "已停止后端服务" "Yellow"
+        }
+        
+        # 删除临时脚本
+        if (Test-Path $tempScriptPath) {
+            Remove-Item $tempScriptPath -Force
         }
     }
 } else {
