@@ -1,28 +1,19 @@
 # PowerShell 脚本：一键启动文书标注系统前端和后端
 # 执行策略设置：如果遇到无法执行的问题，请先在管理员PowerShell中运行: Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 
-# 配置颜色和格式化输出
+# 配置颜色输出
 function Write-ColorOutput {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Message,
         
         [Parameter(Mandatory = $true)]
-        [string]$Color,
-        
-        [Parameter(Mandatory = $false)]
-        [switch]$NoNewline
+        [string]$Color
     )
     
     $originalColor = $host.UI.RawUI.ForegroundColor
     $host.UI.RawUI.ForegroundColor = $Color
-    
-    if ($NoNewline) {
-        Write-Host $Message -NoNewline
-    } else {
-        Write-Output $Message
-    }
-    
+    Write-Output $Message
     $host.UI.RawUI.ForegroundColor = $originalColor
 }
 
@@ -58,177 +49,98 @@ if (-not (Test-Path -Path $backendDir)) {
     exit 1
 }
 
+# 创建启动后端的脚本
+$backendScript = @"
 # 激活 Conda 环境
-try {
-    Write-ColorOutput "正在激活 Conda 环境 (annotator)..." "Yellow"
-    conda activate annotator
-    
-    # 检查 Conda 环境是否激活成功
-    if ($LASTEXITCODE -ne 0) {
-        Write-ColorOutput "错误：无法激活 Conda 环境，请确保已安装 Conda 并创建了 'annotator' 环境" "Red"
-        exit 1
-    }
-} catch {
-    Write-ColorOutput "错误：无法激活 Conda 环境: $_" "Red"
-    Write-ColorOutput "请确保已安装 Conda 并创建了 'annotator' 环境" "Red"
+Write-Host "正在激活 Conda 环境 (annotator)..." -ForegroundColor Yellow
+conda activate annotator
+
+# 检查 Conda 环境是否激活成功
+if (`$LASTEXITCODE -ne 0) {
+    Write-Host "错误：无法激活 Conda 环境，请确保已安装 Conda 并创建了 'annotator' 环境" -ForegroundColor Red
+    Read-Host "按任意键退出"
     exit 1
 }
 
+# 切换到后端目录
+Set-Location "$backendDir"
+
 # 启动后端服务
-Write-ColorOutput "正在启动后端服务..." "Yellow"
-$backendJob = Start-Job -ScriptBlock {
-    param($dir)
-    try {
-        Set-Location $dir
-        python -m app.main
-    } catch {
-        Write-Output "后端服务启动失败: $_"
-        exit 1
-    }
-} -ArgumentList $backendDir
+Write-Host "正在启动后端服务..." -ForegroundColor Green
+Write-Host "后端服务地址: http://localhost:8000" -ForegroundColor Cyan
+Write-Host "按 Ctrl+C 可以停止服务" -ForegroundColor Yellow
+Write-Host "=================================" -ForegroundColor Green
 
-# 等待后端启动
-Write-ColorOutput "等待后端服务启动 (5秒)..." "Yellow"
-Start-Sleep -Seconds 5
+# 执行后端启动命令
+python -m app.main
 
-# 检查后端是否成功启动
-$backendState = Receive-Job -Job $backendJob -Keep
-$backendError = $false
-if ($null -eq $backendState) {
-    Write-ColorOutput "后端服务启动中..." "Green"
-} elseif ($backendState -like "*后端服务启动失败*") {
-    Write-ColorOutput "后端服务启动失败！" "Red"
-    Write-ColorOutput $backendState "Red"
-    $backendError = $true
-} else {
-    Write-ColorOutput "后端服务输出：" "Cyan"
-    Write-Output $backendState
-}
-
-# 只有后端没问题才启动前端
-if (-not $backendError) {
-    # 创建自定义启动命令，避免CJS警告
-    $npmRunCommand = @"
-cd "$frontendDir"
-$env:NODE_OPTIONS="--no-warnings"
-npm run dev
+# 等待用户输入后关闭窗口
+Read-Host "按任意键退出"
 "@
-    $tempScriptPath = Join-Path -Path $env:TEMP -ChildPath "run-frontend.ps1"
-    $npmRunCommand | Out-File -FilePath $tempScriptPath -Encoding utf8
 
-    # 启动前端服务
-    Write-ColorOutput "正在启动前端服务..." "Yellow"
-    $frontendJob = Start-Job -ScriptBlock {
-        param($scriptPath)
-        try {
-            powershell.exe -ExecutionPolicy Bypass -File $scriptPath
-        } catch {
-            Write-Output "前端服务启动失败: $_"
-            exit 1
-        }
-    } -ArgumentList $tempScriptPath
+# 创建启动前端的脚本
+$frontendScript = @"
+# 切换到前端目录
+Set-Location "$frontendDir"
 
-    # 等待前端启动
-    Write-ColorOutput "等待前端服务启动 (8秒)..." "Yellow"
-    Start-Sleep -Seconds 8
+# 设置环境变量，消除 CJS 警告
+`$env:NODE_OPTIONS="--no-warnings"
 
-    # 检查前端是否成功启动
-    $frontendState = Receive-Job -Job $frontendJob -Keep
-    $frontendError = $false
-    if ($null -eq $frontendState) {
-        Write-ColorOutput "前端服务启动中..." "Green"
-    } elseif ($frontendState -like "*前端服务启动失败*") {
-        Write-ColorOutput "前端服务启动失败！" "Red"
-        Write-ColorOutput $frontendState "Red"
-        $frontendError = $true
-    } else {
-        Write-ColorOutput "前端服务输出：" "Cyan"
-        Write-Output $frontendState
-    }
+# 启动前端服务
+Write-Host "正在启动前端服务..." -ForegroundColor Green
+Write-Host "前端服务地址: http://localhost:3000" -ForegroundColor Cyan
+Write-Host "按 Ctrl+C 可以停止服务" -ForegroundColor Yellow
+Write-Host "=================================" -ForegroundColor Green
 
-    # 显示服务状态
-    if (-not $frontendError) {
-        Write-Output ""
-        Write-ColorOutput "=========================================" "Green"
-        Write-ColorOutput "       服务状态" "Green"
-        Write-ColorOutput "=========================================" "Green"
-        Write-ColorOutput "后端服务: 运行中 (http://localhost:8000)" "Green"
-        Write-ColorOutput "前端服务: 运行中 (http://localhost:3000)" "Green"
-        Write-ColorOutput "=========================================" "Green"
-        Write-Output ""
-        Write-ColorOutput "系统已启动! 请在浏览器中访问: http://localhost:3000" "Cyan"
-        Write-ColorOutput "按 Ctrl+C 停止所有服务" "Yellow"
-        Write-Output ""
+# 执行前端启动命令
+npm run dev
 
-        # 打开浏览器
-        $openBrowser = Read-Host "是否自动打开浏览器？(y/n)"
-        if ($openBrowser -eq "y" -or $openBrowser -eq "Y") {
-            Start-Process "http://localhost:3000"
-        }
+# 等待用户输入后关闭窗口
+Read-Host "按任意键退出"
+"@
 
-        # 等待用户按下 Ctrl+C
-        try {
-            # 显示后端日志
-            while ($true) {
-                $backendOutput = Receive-Job -Job $backendJob -Keep
-                if ($null -ne $backendOutput) {
-                    Write-ColorOutput "[后端] " "DarkGray" -NoNewline
-                    Write-Output $backendOutput
-                }
-                
-                $frontendOutput = Receive-Job -Job $frontendJob -Keep
-                if ($null -ne $frontendOutput -and -not ($frontendOutput -like "*CJS build*")) {
-                    Write-ColorOutput "[前端] " "DarkGray" -NoNewline
-                    Write-Output $frontendOutput
-                }
-                
-                Start-Sleep -Seconds 1
-            }
-        }
-        catch {
-            # 当用户按 Ctrl+C 时
-            Write-Output ""
-            Write-ColorOutput "正在停止服务..." "Yellow"
-            
-            # 停止后端作业
-            if ($null -ne $backendJob) {
-                Stop-Job -Job $backendJob
-                Remove-Job -Job $backendJob -Force
-            }
-            
-            # 停止前端作业
-            if ($null -ne $frontendJob) {
-                Stop-Job -Job $frontendJob
-                Remove-Job -Job $frontendJob -Force
-            }
-            
-            # 删除临时脚本
-            if (Test-Path $tempScriptPath) {
-                Remove-Item $tempScriptPath -Force
-            }
-            
-            Write-ColorOutput "所有服务已停止" "Green"
-        }
-    } else {
-        # 前端启动失败，停止后端
-        if ($null -ne $backendJob) {
-            Stop-Job -Job $backendJob
-            Remove-Job -Job $backendJob -Force
-            Write-ColorOutput "已停止后端服务" "Yellow"
-        }
-        
-        # 删除临时脚本
-        if (Test-Path $tempScriptPath) {
-            Remove-Item $tempScriptPath -Force
-        }
-    }
-} else {
-    Write-ColorOutput "因后端启动失败，前端服务未启动" "Red"
+# 保存临时脚本
+$backendScriptPath = Join-Path -Path $env:TEMP -ChildPath "run-backend.ps1"
+$frontendScriptPath = Join-Path -Path $env:TEMP -ChildPath "run-frontend.ps1"
+
+$backendScript | Out-File -FilePath $backendScriptPath -Encoding utf8
+$frontendScript | Out-File -FilePath $frontendScriptPath -Encoding utf8
+
+# 启动后端窗口
+Write-ColorOutput "正在打开后端窗口..." "Yellow"
+Start-Process powershell.exe -ArgumentList "-NoExit -ExecutionPolicy Bypass -File `"$backendScriptPath`"" -WindowStyle Normal
+
+# 等待2秒，确保后端开始启动
+Start-Sleep -Seconds 2
+
+# 启动前端窗口
+Write-ColorOutput "正在打开前端窗口..." "Yellow"
+Start-Process powershell.exe -ArgumentList "-NoExit -ExecutionPolicy Bypass -File `"$frontendScriptPath`"" -WindowStyle Normal
+
+# 显示打开浏览器的选项
+Write-Output ""
+Write-ColorOutput "服务启动中..." "Green"
+Write-ColorOutput "前端地址: http://localhost:3000" "Cyan"
+Write-ColorOutput "后端地址: http://localhost:8000" "Cyan"
+Write-Output ""
+
+# 等待启动完成
+Start-Sleep -Seconds 3
+
+# 询问是否打开浏览器
+$openBrowser = Read-Host "是否自动打开浏览器？(y/n)"
+if ($openBrowser -eq "y" -or $openBrowser -eq "Y") {
+    Start-Process "http://localhost:3000"
 }
 
-# 确保清理所有作业
-finally {
-    # 清理所有残余作业
-    Get-Job | Where-Object { $_.State -ne 'Completed' } | Stop-Job
-    Get-Job | Remove-Job -Force
-} 
+# 等待一段时间后删除临时脚本
+Start-Sleep -Seconds 5
+if (Test-Path $backendScriptPath) {
+    Remove-Item $backendScriptPath -Force -ErrorAction SilentlyContinue
+}
+if (Test-Path $frontendScriptPath) {
+    Remove-Item $frontendScriptPath -Force -ErrorAction SilentlyContinue
+}
+
+Write-ColorOutput "启动完成！服务正在单独的窗口中运行。" "Green"
+Write-ColorOutput "关闭相应的窗口即可停止对应服务。" "Yellow" 
