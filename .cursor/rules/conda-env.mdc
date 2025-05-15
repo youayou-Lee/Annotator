@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# conda 环境确认：
+- 本项目的conda环境 为 annotator,请在执行python命令前一定确保处于正确的conda环境
+- 切换至正确的环境命令为：conda activate annotator
+
+- 一旦发现 什么包 未安装，先检查conda环境是否正确。再决定要不要pip install

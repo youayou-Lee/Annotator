@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# 本环节的目前命令行均运行于Windows平台，故所有命令行操作均应该考虑这一点

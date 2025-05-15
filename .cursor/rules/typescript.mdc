@@ -1,0 +1,60 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# TypeScript开发规则
+
+## 代码格式化
+- 使用分号
+- 使用单引号
+- 使用ES5尾随逗号
+- 行长度限制：100字符
+- 使用4个空格缩进
+- 不使用Tab
+
+## ESLint配置
+### 扩展配置
+- eslint:recommended
+- @typescript-eslint/recommended
+- plugin:react/recommended
+- plugin:react-hooks/recommended
+- prettier
+
+### 规则设置
+- 禁用react/react-in-jsx-scope
+- 禁用@typescript-eslint/explicit-module-boundary-types
+- 警告使用any类型
+- 限制console使用（只允许warn和error）
+
+## 测试规范
+使用Jest：
+- 使用jsdom环境
+- 配置setupTests.ts
+- 处理样式文件导入
+
+## TypeScript配置
+启用严格模式：
+- 禁止隐式any
+- 启用严格空值检查
+- 启用严格函数类型
+- 启用严格绑定调用
+- 启用严格属性初始化
+- 禁止隐式this
+- 始终使用严格模式
+
+## 组件规范
+- 使用函数组件
+- 使用TypeScript类型
+- 使用React Hooks
+- 使用Props接口
+- 使用状态管理（Zustand）
+
+## 文件组织
+- 组件文件：PascalCase
+- 工具文件：camelCase
+- 样式文件：kebab-case
+- 测试文件：*.test.tsx
+- 类型定义：*.d.ts
+
+

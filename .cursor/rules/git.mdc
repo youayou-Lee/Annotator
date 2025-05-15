@@ -1,0 +1,69 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Git开发规则
+
+## 提交信息规范
+### 类型（必填）
+- feat: 新功能
+- fix: 修复bug
+- docs: 文档更新
+- style: 代码格式调整
+- refactor: 代码重构
+- test: 测试相关
+- chore: 构建过程或辅助工具的变动
+
+### 格式
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+### 规则
+- 类型必填
+- 范围可选
+- 主题必填
+- 正文可选
+- 页脚可选
+- 总长度不超过100字符
+
+## 分支命名规范
+- 功能分支：feature/功能名
+- 修复分支：bugfix/问题描述
+- 紧急修复：hotfix/问题描述
+- 发布分支：release/版本号
+
+## Git忽略文件
+### 目录
+- node_modules/
+- __pycache__/
+- .pytest_cache/
+- dist/
+- build/
+- env/
+- venv/
+- .env/
+- .venv/
+
+### 文件
+- *.pyc
+- *.pyo
+- *.pyd
+- .Python
+- *.log
+- .DS_Store
+
+## 工作流程
+1. 从主分支创建功能分支
+2. 在功能分支上开发
+3. 提交代码并推送到远程
+4. 创建Pull Request
+5. 代码审查
+6. 合并到主分支
+
+
