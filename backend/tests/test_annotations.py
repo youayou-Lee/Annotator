@@ -8,10 +8,19 @@ from app.schemas.document import DocumentCreate
 from app.services.task import create_task
 from app.schemas.task import TaskCreate
 from app.models.task import TaskStatus
-from app.models.annotation import AnnotationType
+from app.models.annotation import AnnotationType, AnnotationStatus
 from app.services.annotation import create_annotation, get_annotation
 from app.schemas.annotation import AnnotationCreate
 from app.models.document import Document
+from app.models.user import User
+from app.models.task import Task
+from app.models.annotation import Annotation
+from app.core.config import settings
+from tests.utils.utils import get_superuser_token_headers
+from tests.utils.user import create_random_user
+from tests.utils.document import create_random_document
+from tests.utils.task import create_random_task
+from tests.utils.annotation import create_random_annotation
 
 def test_create_annotation(client: TestClient, db: Session):
     # 创建测试用户
@@ -394,3 +403,157 @@ def test_delete_annotation(client: TestClient, db: Session):
         headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 404
+
+def test_create_conflicting_annotations(
+    client: TestClient, db: Session
+) -> None:
+    # 创建用户
+    user = create_random_user(db)
+    user_id = user.id  # 保存用户ID，避免后续使用user对象
+    
+    login_data = {
+        "username": user.email,
+        "password": "testpass123",
+    }
+    r = client.post("/api/v1/auth/login", data=login_data, headers={"Content-Type": "application/x-www-form-urlencoded"})
+    assert r.status_code == 200
+    token = r.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # 创建文档
+    document = create_random_document(db, owner_id=user_id)
+    document_id = document.id
+    
+    # 创建任务
+    task_data = {
+        "document_id": document_id,
+        "annotator_id": user_id,
+        "user_id": user_id,
+        "title": "Test Task",
+        "description": "Test Description"
+    }
+    r = client.post("/api/v1/tasks/", json=task_data, headers=headers)
+    assert r.status_code == 200
+    task = r.json()
+    
+    # 创建第一个标注
+    annotation_data = {
+        "task_id": task["id"],
+        "annotator_id": user_id,
+        "annotation_type": AnnotationType.TEXT,
+        "content": {
+            "text": "Test annotation",
+            "start_offset": 0,
+            "end_offset": 10
+        }
+    }
+    r = client.post("/api/v1/annotations/", json=annotation_data, headers=headers)
+    assert r.status_code == 200
+    annotation1 = r.json()
+    assert annotation1["status"] == AnnotationStatus.PENDING
+    
+    # 创建重叠的标注
+    annotation_data2 = {
+        "task_id": task["id"],
+        "annotator_id": user_id,
+        "annotation_type": AnnotationType.TEXT,
+        "content": {
+            "text": "Test annotation",
+            "start_offset": 5,
+            "end_offset": 15
+        }
+    }
+    r = client.post("/api/v1/annotations/", json=annotation_data2, headers=headers)
+    assert r.status_code == 200
+    annotation2 = r.json()
+    assert annotation2["status"] == AnnotationStatus.CONFLICT
+    assert annotation2["conflict_with"] == annotation1["id"]
+    
+    # 验证第一个标注也被标记为冲突
+    r = client.get(f"/api/v1/annotations/{annotation1['id']}", headers=headers)
+    assert r.status_code == 200
+    updated_annotation1 = r.json()
+    assert updated_annotation1["status"] == AnnotationStatus.CONFLICT
+    assert updated_annotation1["conflict_with"] == annotation2["id"]
+
+def test_update_annotation_creates_conflict(
+    client: TestClient, db: Session
+) -> None:
+    # 创建用户
+    user = create_random_user(db)
+    user_id = user.id  # 保存用户ID，避免后续使用user对象
+    
+    login_data = {
+        "username": user.email,
+        "password": "testpass123",
+    }
+    r = client.post("/api/v1/auth/login", data=login_data, headers={"Content-Type": "application/x-www-form-urlencoded"})
+    assert r.status_code == 200
+    token = r.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # 创建文档
+    document = create_random_document(db, owner_id=user_id)
+    document_id = document.id
+    
+    # 创建任务
+    task_data = {
+        "document_id": document_id,
+        "annotator_id": user_id,
+        "user_id": user_id,
+        "title": "Test Task",
+        "description": "Test Description"
+    }
+    r = client.post("/api/v1/tasks/", json=task_data, headers=headers)
+    assert r.status_code == 200
+    task = r.json()
+    
+    # 创建两个不重叠的标注
+    annotation_data1 = {
+        "task_id": task["id"],
+        "annotator_id": user_id,
+        "annotation_type": AnnotationType.TEXT,
+        "content": {
+            "text": "Test annotation 1",
+            "start_offset": 0,
+            "end_offset": 10
+        }
+    }
+    r = client.post("/api/v1/annotations/", json=annotation_data1, headers=headers)
+    assert r.status_code == 200
+    annotation1 = r.json()
+    
+    annotation_data2 = {
+        "task_id": task["id"],
+        "annotator_id": user_id,
+        "annotation_type": AnnotationType.TEXT,
+        "content": {
+            "text": "Test annotation 2",
+            "start_offset": 20,
+            "end_offset": 30
+        }
+    }
+    r = client.post("/api/v1/annotations/", json=annotation_data2, headers=headers)
+    assert r.status_code == 200
+    annotation2 = r.json()
+    
+    # 更新第二个标注使其与第一个重叠
+    update_data = {
+        "content": {
+            "text": "Test annotation 2",
+            "start_offset": 5,
+            "end_offset": 15
+        }
+    }
+    r = client.put(f"/api/v1/annotations/{annotation2['id']}", json=update_data, headers=headers)
+    assert r.status_code == 200
+    updated_annotation2 = r.json()
+    assert updated_annotation2["status"] == AnnotationStatus.CONFLICT
+    assert updated_annotation2["conflict_with"] == annotation1["id"]
+    
+    # 验证第一个标注也被标记为冲突
+    r = client.get(f"/api/v1/annotations/{annotation1['id']}", headers=headers)
+    assert r.status_code == 200
+    updated_annotation1 = r.json()
+    assert updated_annotation1["status"] == AnnotationStatus.CONFLICT
+    assert updated_annotation1["conflict_with"] == annotation2["id"]

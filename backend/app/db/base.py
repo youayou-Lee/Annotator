@@ -4,4 +4,5 @@ from app.db.base_class import Base  # noqa
 from app.models.user import User  # noqa
 from app.models.task import Task  # noqa
 from app.models.document import Document  # noqa
-from app.models.annotation import Annotation  # noqa 
+from app.models.annotation import Annotation  # noqa
+from app.models.export_task import ExportTask  # noqa 

@@ -22,6 +22,8 @@ class Task(Base):
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
     annotator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     user = relationship("User", back_populates="tasks", foreign_keys=[annotator_id])
     document = relationship("Document", back_populates="tasks")
     annotations = relationship("Annotation", back_populates="task", cascade="all, delete-orphan") 
