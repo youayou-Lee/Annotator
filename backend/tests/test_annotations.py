@@ -9,7 +9,7 @@ from app.services.task import create_task
 from app.schemas.task import TaskCreate
 from app.models.task import TaskStatus
 from app.models.annotation import AnnotationType
-from app.services.annotation import create_annotation
+from app.services.annotation import create_annotation, get_annotation
 from app.schemas.annotation import AnnotationCreate
 from app.models.document import Document
 
@@ -21,6 +21,7 @@ def test_create_annotation(client: TestClient, db: Session):
         "password": "testpass123"
     }
     user = create_user(db, UserCreate(**user_data))
+    user_id = user.id  # 保存用户ID，避免后续使用user对象
     
     # 登录获取 token
     login_data = {
@@ -42,7 +43,7 @@ def test_create_annotation(client: TestClient, db: Session):
         "file_path": "/tmp/test.txt",
         "file_size": 100,
         "file_type": ".txt",
-        "uploader_id": user.id
+        "uploader_id": user_id
     }
     document = Document(**document_data)
     db.add(document)
@@ -52,19 +53,19 @@ def test_create_annotation(client: TestClient, db: Session):
     # 创建测试任务
     task_data = {
         "document_id": document.id,
-        "annotator_id": user.id,
-        "user_id": user.id,
+        "annotator_id": user_id,
+        "user_id": user_id,
         "status": TaskStatus.PENDING,
         "title": "测试任务",
         "description": "测试任务描述"
     }
     task = create_task(db, task_in=TaskCreate(**task_data))
-    db.refresh(task)
+    task_id = task.id  # 只保存ID，不使用task对象
     
     # 创建标注
     annotation_data = {
-        "task_id": task.id,
-        "annotator_id": user.id,
+        "task_id": task_id,
+        "annotator_id": user_id,
         "annotation_type": AnnotationType.TEXT,
         "content": {
             "text": "测试标注内容",
@@ -80,8 +81,8 @@ def test_create_annotation(client: TestClient, db: Session):
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["task_id"] == task.id
-    assert data["annotator_id"] == user.id
+    assert data["task_id"] == task_id
+    assert data["annotator_id"] == user_id
     assert data["annotation_type"] == AnnotationType.TEXT
     assert data["content"]["text"] == "测试标注内容"
 
@@ -93,6 +94,7 @@ def test_get_annotations(client: TestClient, db: Session):
         "password": "testpass123"
     }
     user = create_user(db, UserCreate(**user_data))
+    user_id = user.id  # 保存用户ID，避免后续使用user对象
     
     # 登录获取 token
     login_data = {
@@ -114,7 +116,7 @@ def test_get_annotations(client: TestClient, db: Session):
         "file_path": "/tmp/test.txt",
         "file_size": 100,
         "file_type": ".txt",
-        "uploader_id": user.id
+        "uploader_id": user_id
     }
     document = Document(**document_data)
     db.add(document)
@@ -124,19 +126,19 @@ def test_get_annotations(client: TestClient, db: Session):
     # 创建测试任务
     task_data = {
         "document_id": document.id,
-        "annotator_id": user.id,
-        "user_id": user.id,
+        "annotator_id": user_id,
+        "user_id": user_id,
         "status": TaskStatus.PENDING,
         "title": "测试任务",
         "description": "测试任务描述"
     }
     task = create_task(db, task_in=TaskCreate(**task_data))
-    db.refresh(task)
+    task_id = task.id  # 只保存ID，不使用task对象
     
     # 创建标注
     annotation_data = {
-        "task_id": task.id,
-        "annotator_id": user.id,
+        "task_id": task_id,
+        "annotator_id": user_id,
         "annotation_type": AnnotationType.TEXT,
         "content": {
             "text": "测试标注内容",
@@ -145,17 +147,18 @@ def test_get_annotations(client: TestClient, db: Session):
             "label": "测试标签"
         }
     }
-    response = client.post(
+    annotation = create_annotation(db, annotation_in=AnnotationCreate(**annotation_data))
+    
+    # 获取标注列表
+    response = client.get(
         "/api/v1/annotations/",
-        json=annotation_data,
         headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["task_id"] == task.id
-    assert data["annotator_id"] == user.id
-    assert data["annotation_type"] == AnnotationType.TEXT
-    assert data["content"]["text"] == "测试标注内容"
+    assert len(data) >= 1
+    assert data[0]["task_id"] == task_id
+    assert data[0]["annotator_id"] == user_id
 
 def test_get_annotation(client: TestClient, db: Session):
     user_data = {
@@ -164,6 +167,7 @@ def test_get_annotation(client: TestClient, db: Session):
         "password": "testpass123"
     }
     user = create_user(db, UserCreate(**user_data))
+    user_id = user.id  # 保存用户ID，避免后续使用user对象
     
     # 登录获取 token
     login_data = {
@@ -185,7 +189,7 @@ def test_get_annotation(client: TestClient, db: Session):
         "file_path": "/tmp/test.txt",
         "file_size": 100,
         "file_type": ".txt",
-        "uploader_id": user.id
+        "uploader_id": user_id
     }
     document = Document(**document_data)
     db.add(document)
@@ -195,19 +199,19 @@ def test_get_annotation(client: TestClient, db: Session):
     # 创建测试任务
     task_data = {
         "document_id": document.id,
-        "annotator_id": user.id,
-        "user_id": user.id,
+        "annotator_id": user_id,
+        "user_id": user_id,
         "status": TaskStatus.PENDING,
         "title": "测试任务",
         "description": "测试任务描述"
     }
     task = create_task(db, task_in=TaskCreate(**task_data))
-    db.refresh(task)
+    task_id = task.id  # 只保存ID，不使用task对象
     
     # 创建标注
     annotation_data = {
-        "task_id": task.id,
-        "annotator_id": user.id,
+        "task_id": task_id,
+        "annotator_id": user_id,
         "annotation_type": AnnotationType.TEXT,
         "content": {
             "text": "测试标注内容",
@@ -216,15 +220,19 @@ def test_get_annotation(client: TestClient, db: Session):
             "label": "测试标签"
         }
     }
-    response = client.post(
-        "/api/v1/annotations/",
-        json=annotation_data,
+    annotation = create_annotation(db, annotation_in=AnnotationCreate(**annotation_data))
+    annotation_id = annotation.id  # 只保存ID，不使用annotation对象
+    
+    # 获取单个标注
+    response = client.get(
+        f"/api/v1/annotations/{annotation_id}",
         headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["task_id"] == task.id
-    assert data["annotator_id"] == user.id
+    assert data["id"] == annotation_id
+    assert data["task_id"] == task_id
+    assert data["annotator_id"] == user_id
     assert data["annotation_type"] == AnnotationType.TEXT
     assert data["content"]["text"] == "测试标注内容"
 
@@ -235,6 +243,7 @@ def test_update_annotation(client: TestClient, db: Session):
         "password": "testpass123"
     }
     user = create_user(db, UserCreate(**user_data))
+    user_id = user.id  # 保存用户ID，避免后续使用user对象
     
     # 登录获取 token
     login_data = {
@@ -256,7 +265,7 @@ def test_update_annotation(client: TestClient, db: Session):
         "file_path": "/tmp/test.txt",
         "file_size": 100,
         "file_type": ".txt",
-        "uploader_id": user.id
+        "uploader_id": user_id
     }
     document = Document(**document_data)
     db.add(document)
@@ -266,19 +275,19 @@ def test_update_annotation(client: TestClient, db: Session):
     # 创建测试任务
     task_data = {
         "document_id": document.id,
-        "annotator_id": user.id,
-        "user_id": user.id,
+        "annotator_id": user_id,
+        "user_id": user_id,
         "status": TaskStatus.PENDING,
         "title": "测试任务",
         "description": "测试任务描述"
     }
     task = create_task(db, task_in=TaskCreate(**task_data))
-    db.refresh(task)
+    task_id = task.id  # 只保存ID，不使用task对象
     
     # 创建标注
     annotation_data = {
-        "task_id": task.id,
-        "annotator_id": user.id,
+        "task_id": task_id,
+        "annotator_id": user_id,
         "annotation_type": AnnotationType.TEXT,
         "content": {
             "text": "测试标注内容",
@@ -287,17 +296,8 @@ def test_update_annotation(client: TestClient, db: Session):
             "label": "测试标签"
         }
     }
-    response = client.post(
-        "/api/v1/annotations/",
-        json=annotation_data,
-        headers={"Authorization": f"Bearer {token}"}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["task_id"] == task.id
-    assert data["annotator_id"] == user.id
-    assert data["annotation_type"] == AnnotationType.TEXT
-    assert data["content"]["text"] == "测试标注内容"
+    annotation = create_annotation(db, annotation_in=AnnotationCreate(**annotation_data))
+    annotation_id = annotation.id  # 只保存ID，不使用annotation对象
     
     # 更新标注
     update_data = {
@@ -309,7 +309,7 @@ def test_update_annotation(client: TestClient, db: Session):
         }
     }
     response = client.put(
-        f"/api/v1/annotations/{data['id']}",
+        f"/api/v1/annotations/{annotation_id}",
         json=update_data,
         headers={"Authorization": f"Bearer {token}"}
     )
@@ -325,6 +325,7 @@ def test_delete_annotation(client: TestClient, db: Session):
         "password": "testpass123"
     }
     user = create_user(db, UserCreate(**user_data))
+    user_id = user.id  # 保存用户ID，避免后续使用user对象
     
     # 登录获取 token
     login_data = {
@@ -346,7 +347,7 @@ def test_delete_annotation(client: TestClient, db: Session):
         "file_path": "/tmp/test.txt",
         "file_size": 100,
         "file_type": ".txt",
-        "uploader_id": user.id
+        "uploader_id": user_id
     }
     document = Document(**document_data)
     db.add(document)
@@ -356,19 +357,19 @@ def test_delete_annotation(client: TestClient, db: Session):
     # 创建测试任务
     task_data = {
         "document_id": document.id,
-        "annotator_id": user.id,
-        "user_id": user.id,
+        "annotator_id": user_id,
+        "user_id": user_id,
         "status": TaskStatus.PENDING,
         "title": "测试任务",
         "description": "测试任务描述"
     }
     task = create_task(db, task_in=TaskCreate(**task_data))
-    db.refresh(task)
+    task_id = task.id  # 只保存ID，不使用task对象
     
     # 创建标注
     annotation_data = {
-        "task_id": task.id,
-        "annotator_id": user.id,
+        "task_id": task_id,
+        "annotator_id": user_id,
         "annotation_type": AnnotationType.TEXT,
         "content": {
             "text": "测试标注内容",
@@ -377,28 +378,19 @@ def test_delete_annotation(client: TestClient, db: Session):
             "label": "测试标签"
         }
     }
-    response = client.post(
-        "/api/v1/annotations/",
-        json=annotation_data,
-        headers={"Authorization": f"Bearer {token}"}
-    )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["task_id"] == task.id
-    assert data["annotator_id"] == user.id
-    assert data["annotation_type"] == AnnotationType.TEXT
-    assert data["content"]["text"] == "测试标注内容"
+    annotation = create_annotation(db, annotation_in=AnnotationCreate(**annotation_data))
+    annotation_id = annotation.id  # 只保存ID，不使用annotation对象
     
     # 删除标注
     response = client.delete(
-        f"/api/v1/annotations/{data['id']}",
+        f"/api/v1/annotations/{annotation_id}",
         headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 200
     
     # 确认标注已被删除
     response = client.get(
-        f"/api/v1/annotations/{data['id']}",
+        f"/api/v1/annotations/{annotation_id}",
         headers={"Authorization": f"Bearer {token}"}
     )
-    assert response.status_code == 404 
+    assert response.status_code == 404
