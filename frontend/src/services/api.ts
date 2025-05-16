@@ -1,6 +1,14 @@
-import axios, { AxiosResponse } from 'axios';
+import axios, { AxiosResponse, AxiosInstance } from 'axios';
 
 const baseURL = '/api/v1';
+
+// 扩展AxiosInstance类型
+interface ApiInstance extends AxiosInstance {
+  post<T = any>(url: string, data?: any, config?: any): Promise<T>;
+  get<T = any>(url: string, config?: any): Promise<T>;
+  put<T = any>(url: string, data?: any, config?: any): Promise<T>;
+  delete<T = any>(url: string, config?: any): Promise<T>;
+}
 
 // Create axios instance
 const api = axios.create({
@@ -9,7 +17,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-});
+}) as ApiInstance;
 
 // Request interceptor
 api.interceptors.request.use(
@@ -33,8 +41,11 @@ api.interceptors.response.use(
   (error) => {
     // Handle 401 errors
     if (error.response && error.response.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+      // 暂时注释掉自动跳转，改为打印警告
+      console.warn('认证失败: 401 Unauthorized. 请先登录获取有效token。');
+      console.warn('在实际项目中，这里会自动跳转到登录页面。');
+      // localStorage.removeItem('token');
+      // window.location.href = '/login';
     }
     return Promise.reject(error);
   }

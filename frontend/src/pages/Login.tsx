@@ -2,6 +2,7 @@ import React from 'react';
 import { Form, Input, Button, Card, Typography, message, Divider, Space } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
+import api from '../services/api';
 
 const { Title } = Typography;
 
@@ -10,19 +11,41 @@ interface LoginFormData {
   password: string;
 }
 
+interface LoginResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+}
+
 const Login: React.FC = () => {
   const [form] = Form.useForm();
   const navigate = useNavigate();
 
   const onFinish = async (values: LoginFormData) => {
     try {
-      // Demo login - in real app this would call the API
+      // 向后端发送登录请求
       console.log('Login form submitted:', values);
-      localStorage.setItem('token', 'demo-token');
-      message.success('Login successful');
+      
+      // 将表单数据转换为FormData格式（OAuth2要求）
+      const formData = new FormData();
+      formData.append('username', values.username);
+      formData.append('password', values.password);
+      
+      // 调用登录API - 由于api.ts中的拦截器，此处直接得到的是response.data
+      const data = await api.post<LoginResponse>('/auth/login', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      // 存储token
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token);
+      
+      message.success('登录成功');
       navigate('/');
-    } catch (error) {
-      message.error('Login failed, please check your username and password');
+    } catch (error: any) {
+      message.error(error.response?.data?.detail || '登录失败，请检查用户名和密码');
       console.error('Login error:', error);
     }
   };

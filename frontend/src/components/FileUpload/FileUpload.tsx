@@ -76,6 +76,11 @@ const FileUpload: React.FC<FileUploadProps> = ({
       console.log("正在发送请求到:", "/documents/upload-validate");
       console.log("完整URL:", `${api.defaults.baseURL}/documents/upload-validate`);
       
+      // 调试认证信息
+      const token = localStorage.getItem('token');
+      console.log("Token是否存在:", !!token);
+      console.log("Token前10个字符:", token ? token.substring(0, 10) + "..." : "无token");
+      
       // 模拟进度条
       const progressInterval = setInterval(() => {
         setProgress(prev => {
