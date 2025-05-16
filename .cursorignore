@@ -3,12 +3,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# 虚拟环境
-env/
-venv/
-ENV/
-.env/
-.venv/
 
 # 数据库
 *.db
@@ -28,22 +22,13 @@ temp/
 # 大型上传文件目录
 test_uploads/
 uploads/
-data/
+
 exports/
-exampleData/
+
 
 # 生成的文件
-dist/
-build/
 node_modules/
 
 # 缓存
 .cache/
 .pytest_cache/
-
-# 不需要索引的大型文件
-*.csv
-*.json
-*.jsonl
-*.xlsx
-*.parquet 
