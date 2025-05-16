@@ -78,7 +78,7 @@ alembic upgrade head
 6. 启动服务
 ```bash
 # 启动后端服务
-uvicorn backend.main:app --reload
+uvicorn app.main:app --reload
 
 # 启动前端服务
 cd frontend

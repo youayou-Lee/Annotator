@@ -8,6 +8,7 @@ import {
   TeamOutlined,
   BookOutlined,
   LogoutOutlined,
+  FolderOpenOutlined,
 } from '@ant-design/icons';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 
@@ -24,12 +25,12 @@ const BasicLayout: React.FC = () => {
     {
       key: 'profile',
       icon: <UserOutlined />,
-      label: 'Profile',
+      label: '个人信息',
     },
     {
       key: 'logout',
       icon: <LogoutOutlined />,
-      label: 'Logout',
+      label: '退出登录',
     },
   ];
 
@@ -37,25 +38,25 @@ const BasicLayout: React.FC = () => {
     {
       key: 'dashboard',
       icon: <BookOutlined />,
-      label: 'Dashboard',
+      label: '仪表盘',
       path: '/',
-    },
-    {
-      key: 'documents',
-      icon: <FileTextOutlined />,
-      label: 'Documents',
-      path: '/documents',
     },
     {
       key: 'tasks',
       icon: <BookOutlined />,
-      label: 'Tasks',
+      label: '任务管理',
       path: '/tasks',
+    },
+    {
+      key: 'public-files',
+      icon: <FolderOpenOutlined />,
+      label: '公共文件库',
+      path: '/public-files',
     },
     {
       key: 'users',
       icon: <TeamOutlined />,
-      label: 'Users',
+      label: '用户管理',
       path: '/users',
     },
   ];
@@ -92,7 +93,7 @@ const BasicLayout: React.FC = () => {
               color: token.colorPrimary 
             }}
           >
-            {collapsed ? 'DAS' : 'Doc Annotation'}
+            {collapsed ? '文档' : '文档标注系统'}
           </Typography.Title>
         </div>
         <Menu
@@ -135,7 +136,7 @@ const BasicLayout: React.FC = () => {
                 alignItems: 'center' 
               }}>
                 <Avatar icon={<UserOutlined />} />
-                <span style={{ marginLeft: 8 }}>Admin</span>
+                <span style={{ marginLeft: 8 }}>管理员</span>
               </div>
             </Dropdown>
           </div>
@@ -150,7 +151,7 @@ const BasicLayout: React.FC = () => {
           <Outlet />
         </Content>
         <Footer style={{ textAlign: 'center' }}>
-          Document Annotation System ©{new Date().getFullYear()}
+          文档标注系统 ©{new Date().getFullYear()}
         </Footer>
       </Layout>
     </Layout>

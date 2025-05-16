@@ -18,7 +18,16 @@ import {
   message,
   Badge,
   Avatar,
-  Tooltip
+  Tooltip,
+  Form,
+  Input,
+  Select,
+  DatePicker,
+  Checkbox,
+  Radio,
+  InputNumber,
+  Alert,
+  List
 } from 'antd';
 import {
   EditOutlined,
@@ -32,12 +41,18 @@ import {
   ArrowLeftOutlined,
   SendOutlined,
   FileSearchOutlined,
-  CommentOutlined
+  CommentOutlined,
+  FieldBinaryOutlined,
+  CheckOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
-import api from '../services/api';
+import api, { taskApi } from '../services/api';
+import { FieldType } from '../components/AnnotationFieldEditor/AnnotationFieldEditor';
 
 const { Title, Paragraph, Text } = Typography;
 const { TabPane } = Tabs;
+const { Option } = Select;
+const { TextArea } = Input;
 
 // 任务状态类型
 const taskStatuses = [
@@ -73,6 +88,61 @@ const mockTasks = [
     documentsCount: 120,
     createdBy: '系统管理员',
     updatedAt: '2023-10-05',
+    // 新增字段定义
+    annotation_fields: [
+      {
+        name: 'patient_name',
+        label: '患者姓名',
+        type: 'string',
+        required: true,
+        description: '患者的真实姓名'
+      },
+      {
+        name: 'patient_age',
+        label: '患者年龄',
+        type: 'integer',
+        required: true,
+        min: 0,
+        max: 120,
+        description: '患者年龄，0-120之间的整数'
+      },
+      {
+        name: 'gender',
+        label: '性别',
+        type: 'enum',
+        required: true,
+        enum_values: ['男', '女', '未知'],
+        description: '患者性别'
+      },
+      {
+        name: 'admission_date',
+        label: '入院日期',
+        type: 'date',
+        required: true,
+        description: '患者入院日期'
+      },
+      {
+        name: 'discharge_date',
+        label: '出院日期',
+        type: 'date',
+        required: false,
+        description: '患者出院日期'
+      },
+      {
+        name: 'diagnosis',
+        label: '诊断结果',
+        type: 'string',
+        required: true,
+        description: '患者的诊断结果'
+      },
+      {
+        name: 'is_emergency',
+        label: '是否急诊',
+        type: 'boolean',
+        required: true,
+        description: '是否为急诊病例'
+      }
+    ]
   },
   {
     id: 2,
@@ -236,63 +306,287 @@ const mockComments = [
   },
 ];
 
+// 界面显示的字段类型映射
+const fieldTypeMap: Record<string, string> = {
+  [FieldType.STRING]: '字符串',
+  [FieldType.INTEGER]: '整数',
+  [FieldType.FLOAT]: '浮点数',
+  [FieldType.BOOLEAN]: '布尔值',
+  [FieldType.DATE]: '日期',
+  [FieldType.DATETIME]: '日期时间',
+  [FieldType.EMAIL]: '电子邮件',
+  [FieldType.PHONE]: '电话号码',
+  [FieldType.ENUM]: '枚举',
+  [FieldType.OBJECT]: '对象',
+  [FieldType.ARRAY]: '数组'
+};
+
+// 根据字段类型渲染不同的表单控件
+const renderFieldControl = (field: any, value: any, onChange: (value: any) => void) => {
+  switch (field.type) {
+    case FieldType.STRING:
+    case FieldType.EMAIL:
+    case FieldType.PHONE:
+      return (
+        <Input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={`请输入${field.label}`}
+        />
+      );
+      
+    case FieldType.INTEGER:
+    case FieldType.FLOAT:
+      return (
+        <InputNumber
+          style={{ width: '100%' }}
+          value={value}
+          onChange={value => onChange(value)}
+          min={field.min}
+          max={field.max}
+          placeholder={`请输入${field.label}`}
+        />
+      );
+      
+    case FieldType.BOOLEAN:
+      return (
+        <Radio.Group
+          value={value}
+          onChange={e => onChange(e.target.value)}
+        >
+          <Radio value={true}>是</Radio>
+          <Radio value={false}>否</Radio>
+        </Radio.Group>
+      );
+      
+    case FieldType.DATE:
+      return (
+        <DatePicker
+          style={{ width: '100%' }}
+          value={value ? moment(value) : null}
+          onChange={date => onChange(date ? date.format('YYYY-MM-DD') : null)}
+        />
+      );
+      
+    case FieldType.DATETIME:
+      return (
+        <DatePicker
+          showTime
+          style={{ width: '100%' }}
+          value={value ? moment(value) : null}
+          onChange={date => onChange(date ? date.format('YYYY-MM-DD HH:mm:ss') : null)}
+        />
+      );
+      
+    case FieldType.ENUM:
+      return (
+        <Select
+          style={{ width: '100%' }}
+          value={value}
+          onChange={value => onChange(value)}
+          placeholder={`请选择${field.label}`}
+        >
+          {field.enum_values?.map((option: string) => (
+            <Option key={option} value={option}>{option}</Option>
+          ))}
+        </Select>
+      );
+      
+    default:
+      return (
+        <Input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={`请输入${field.label}`}
+        />
+      );
+  }
+};
+
 const TaskDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [task, setTask] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [documents, setDocuments] = useState(mockDocuments);
-  const [history, setHistory] = useState(mockHistory);
-  const [comments, setComments] = useState(mockComments);
-  const [newComment, setNewComment] = useState('');
-  const [selectedTab, setSelectedTab] = useState('info');
-  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState('info');
+  const [annotationData, setAnnotationData] = useState<Record<string, any>>({});
+  const [validationResult, setValidationResult] = useState<any>(null);
+  const [validating, setValidating] = useState(false);
+  const [canSubmit, setCanSubmit] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    // 在实际应用中，这里应该从API获取任务详情
-    const taskId = Number(id);
-    const found = mockTasks.find(t => t.id === taskId);
-    
-    if (found) {
-      setTask(found);
-    }
-    setLoading(false);
+    // 模拟加载任务数据
+    setLoading(true);
+    // 从API加载任务数据
+    // 此处使用模拟数据
+    setTimeout(() => {
+      const foundTask = mockTasks.find(t => t.id === Number(id));
+      if (foundTask) {
+        setTask(foundTask);
+        
+        // 初始化标注数据
+        const initialData: Record<string, any> = {};
+        foundTask.annotation_fields?.forEach(field => {
+          initialData[field.name] = field.default || null;
+        });
+        setAnnotationData(initialData);
+      }
+      setLoading(false);
+    }, 500);
   }, [id]);
 
-  // 返回任务列表页
   const handleBack = () => {
     navigate('/tasks');
   };
 
-  // 编辑任务
   const handleEdit = () => {
-    message.info(`编辑任务 ${id}`);
+    message.info('编辑功能暂未实现');
   };
 
-  // 确认删除任务
   const confirmDelete = () => {
-    message.success(`已删除任务 ${id}`);
-    setDeleteModalVisible(false);
-    navigate('/tasks');
+    Modal.confirm({
+      title: '确认删除',
+      content: '确定要删除此任务吗？此操作不可恢复。',
+      okText: '确认',
+      cancelText: '取消',
+      onOk: () => {
+        message.success('任务已删除');
+        navigate('/tasks');
+      }
+    });
   };
 
-  // 添加评论
   const handleAddComment = () => {
-    if (!newComment.trim()) return;
-    
-    const newCommentObj = {
-      id: comments.length + 1,
-      user: '当前用户',
-      content: newComment,
-      time: new Date().toLocaleString(),
-    };
-    
-    setComments([...comments, newCommentObj]);
-    setNewComment('');
-    message.success('评论已添加');
+    message.info('评论功能暂未实现');
   };
 
-  // 获取状态标签
+  // 处理标注字段值变更
+  const handleFieldChange = (fieldName: string, value: any) => {
+    setAnnotationData(prev => ({
+      ...prev,
+      [fieldName]: value
+    }));
+    
+    // 清除之前的验证结果
+    setValidationResult(null);
+  };
+
+  // 验证标注数据
+  const validateAnnotation = async () => {
+    const taskId = parseInt(id || '0', 10);
+    if (!taskId) {
+      message.error('无效的任务ID');
+      return;
+    }
+
+    // 获取所有字段的值
+    const annotationData: Record<string, any> = {};
+    task.annotation_fields.forEach((field: any) => {
+      annotationData[field.name] = annotationData[field.name] || field.default || null;
+    });
+
+    try {
+      setValidating(true);
+      // 使用新的API进行验证
+      const validationResult = await taskApi.validateAnnotation(taskId, annotationData);
+      setValidating(false);
+
+      if (validationResult.valid) {
+        message.success('验证通过！');
+        setValidationResult(null);
+        setCanSubmit(true);
+      } else {
+        setValidationResult({
+          valid: false,
+          errors: validationResult.errors || []
+        });
+        message.error('验证失败，请检查错误信息');
+        setCanSubmit(false);
+      }
+    } catch (error) {
+      console.error('验证失败:', error);
+      message.error('验证过程中发生错误');
+      setValidating(false);
+      setCanSubmit(false);
+    }
+  };
+
+  // 验证文档格式
+  const validateDocumentFormat = async (documentData: Record<string, any>) => {
+    const taskId = parseInt(id || '0', 10);
+    if (!taskId) {
+      message.error('无效的任务ID');
+      return false;
+    }
+
+    try {
+      const validationResult = await taskApi.validateDocumentFormat(taskId, documentData);
+      
+      if (validationResult.valid) {
+        message.success('文档格式验证通过');
+        return true;
+      } else {
+        Modal.error({
+          title: '文档格式验证失败',
+          content: (
+            <div>
+              <p>请检查以下错误：</p>
+              <ul>
+                {Array.isArray(validationResult.errors) ? (
+                  validationResult.errors.map((err: any, index: number) => (
+                    <li key={index}>{typeof err === 'string' ? err : JSON.stringify(err)}</li>
+                  ))
+                ) : (
+                  <li>{String(validationResult.errors)}</li>
+                )}
+              </ul>
+            </div>
+          )
+        });
+        return false;
+      }
+    } catch (error) {
+      console.error('文档格式验证失败:', error);
+      message.error('文档格式验证过程中发生错误');
+      return false;
+    }
+  };
+
+  // 提交标注数据
+  const submitAnnotation = async () => {
+    const taskId = parseInt(id || '0', 10);
+    if (!taskId) {
+      message.error('无效的任务ID');
+      return;
+    }
+
+    // 获取所有字段的值
+    const annotationData: Record<string, any> = {};
+    task.annotation_fields.forEach((field: any) => {
+      annotationData[field.name] = annotationData[field.name] || field.default || null;
+    });
+
+    try {
+      setSubmitting(true);
+      // 使用新的API存储标注数据
+      const result = await taskApi.storeAnnotation(taskId, annotationData);
+      setSubmitting(false);
+
+      if (result.success) {
+        message.success('标注数据已保存');
+        // 刷新任务状态
+        fetchTaskDetail();
+      } else {
+        message.error(result.message || '保存标注数据失败');
+      }
+    } catch (error) {
+      console.error('提交标注失败:', error);
+      message.error('提交过程中发生错误');
+      setSubmitting(false);
+    }
+  };
+
   const getStatusTag = (status: string) => {
     const statusObj = taskStatuses.find(s => s.value === status);
     return (
@@ -302,7 +596,6 @@ const TaskDetail: React.FC = () => {
     );
   };
 
-  // 获取优先级标签
   const getPriorityTag = (priority: string) => {
     const priorityObj = priorities.find(p => p.value === priority);
     return (
@@ -312,103 +605,36 @@ const TaskDetail: React.FC = () => {
     );
   };
 
-  // 获取文档状态标签
   const getDocumentStatusTag = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <Tag color="success">已完成</Tag>;
-      case 'in_progress':
-        return <Tag color="processing">进行中</Tag>;
-      case 'pending':
-        return <Tag color="default">待处理</Tag>;
-      default:
-        return <Tag>{status}</Tag>;
+    if (status === 'completed') {
+      return <Tag color="success">已标注</Tag>;
+    } else if (status === 'in_progress') {
+      return <Tag color="processing">标注中</Tag>;
+    } else {
+      return <Tag>未标注</Tag>;
     }
   };
 
-  // 获取审核状态标签
   const getReviewStatusTag = (status: string | null) => {
-    if (!status) return '-';
+    if (!status) {
+      return <Tag>未审核</Tag>;
+    }
     
-    switch (status) {
-      case 'approved':
-        return <Tag color="success">已通过</Tag>;
-      case 'rejected':
-        return <Tag color="error">已拒绝</Tag>;
-      default:
-        return <Tag>{status}</Tag>;
+    if (status === 'approved') {
+      return <Tag color="success">已通过</Tag>;
+    } else if (status === 'rejected') {
+      return <Tag color="error">已拒绝</Tag>;
+    } else {
+      return <Tag>未知状态</Tag>;
     }
   };
-
-  // 文档列表列定义
-  const documentsColumns = [
-    {
-      title: '文档名称',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text: string) => <a>{text}</a>,
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => getDocumentStatusTag(status),
-    },
-    {
-      title: '标注人',
-      dataIndex: 'annotatedBy',
-      key: 'annotatedBy',
-      render: (text: string | null) => text || '-',
-    },
-    {
-      title: '标注时间',
-      dataIndex: 'annotatedAt',
-      key: 'annotatedAt',
-      render: (text: string | null) => text || '-',
-    },
-    {
-      title: '审核状态',
-      dataIndex: 'reviewStatus',
-      key: 'reviewStatus',
-      render: (status: string | null) => getReviewStatusTag(status),
-    },
-    {
-      title: '审核人',
-      dataIndex: 'reviewedBy',
-      key: 'reviewedBy',
-      render: (text: string | null) => text || '-',
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: any, record: any) => (
-        <Space size="middle">
-          {record.status === 'pending' || record.status === 'in_progress' ? (
-            <Button type="link" size="small">
-              标注
-            </Button>
-          ) : null}
-          
-          {record.status === 'completed' && record.reviewStatus !== 'approved' ? (
-            <Button type="link" size="small">
-              审核
-            </Button>
-          ) : null}
-          
-          <Button type="link" size="small">
-            查看
-          </Button>
-        </Space>
-      ),
-    },
-  ];
 
   if (loading) {
     return <div>加载中...</div>;
   }
 
   if (!task) {
-    return <div>未找到任务</div>;
+    return <div>任务不存在</div>;
   }
 
   return (
@@ -418,188 +644,297 @@ const TaskDetail: React.FC = () => {
           icon={<ArrowLeftOutlined />} 
           onClick={handleBack}
         >
-          返回任务列表
+          返回列表
         </Button>
       </div>
-
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col span={16}>
-          <Title level={2} style={{ margin: 0 }}>
-            {task.name}
-          </Title>
-        </Col>
-        <Col span={8} style={{ textAlign: 'right' }}>
+      
+      <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <Title level={2}>{task.name}</Title>
+            <Space>
+              {getStatusTag(task.status)}
+              {getPriorityTag(task.priority)}
+              <Text type="secondary">
+                <CalendarOutlined /> 截止日期: {task.deadline}
+              </Text>
+            </Space>
+          </div>
           <Space>
-            <Button
+            <Button 
               icon={<EditOutlined />}
               onClick={handleEdit}
-              disabled={task.status === 'approved'}
             >
               编辑
             </Button>
-            <Button
+            <Button 
               danger
               icon={<DeleteOutlined />}
-              onClick={() => setDeleteModalVisible(true)}
-              disabled={task.status === 'in_progress' || task.status === 'approved'}
+              onClick={confirmDelete}
             >
               删除
             </Button>
           </Space>
-        </Col>
-      </Row>
-
-      <Tabs 
-        activeKey={selectedTab} 
-        onChange={setSelectedTab}
-        style={{ marginBottom: 16 }}
-      >
-        <TabPane tab="基本信息" key="info" />
-        <TabPane tab="文档列表" key="documents" />
-        <TabPane tab="历史记录" key="history" />
-        <TabPane tab="讨论" key="comments" />
-      </Tabs>
-
-      {selectedTab === 'info' && (
-        <Card>
-          <Row gutter={[16, 16]}>
-            <Col span={16}>
-              <Descriptions 
-                title="任务详情" 
-                bordered 
-                column={{ xxl: 3, xl: 3, lg: 3, md: 2, sm: 1, xs: 1 }}
-              >
-                <Descriptions.Item label="任务ID">{task.id}</Descriptions.Item>
-                <Descriptions.Item label="状态">{getStatusTag(task.status)}</Descriptions.Item>
-                <Descriptions.Item label="优先级">{getPriorityTag(task.priority)}</Descriptions.Item>
-                <Descriptions.Item label="文档类型">{task.documentType}</Descriptions.Item>
-                <Descriptions.Item label="文档数量">{task.documentsCount}</Descriptions.Item>
-                <Descriptions.Item label="负责人">{task.assigneeName}</Descriptions.Item>
-                <Descriptions.Item label="创建日期">{task.createdAt}</Descriptions.Item>
-                <Descriptions.Item label="截止日期">{task.deadline}</Descriptions.Item>
-                <Descriptions.Item label="最后更新">{task.updatedAt}</Descriptions.Item>
-                <Descriptions.Item label="创建人">{task.createdBy}</Descriptions.Item>
-                <Descriptions.Item label="描述" span={3}>
-                  {task.description}
-                </Descriptions.Item>
-              </Descriptions>
-            </Col>
-            <Col span={8}>
-              <Card title="任务进度" variant="borderless">
-                <Progress
-                  type="circle"
-                  percent={task.progress}
-                  width={120}
-                  format={percent => `${percent}%`}
-                  status={task.status === 'rejected' ? 'exception' : undefined}
-                />
-                <Divider />
-                <Descriptions column={1} size="small">
-                  <Descriptions.Item label="已完成文档">
-                    {Math.round(task.documentsCount * task.progress / 100)} / {task.documentsCount}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="剩余时间">
-                    {(() => {
-                      const deadline = new Date(task.deadline);
-                      const today = new Date();
-                      const diffTime = deadline.getTime() - today.getTime();
-                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                      
-                      return diffDays > 0 
-                        ? `${diffDays}天` 
-                        : <Text type="danger">已过期</Text>;
-                    })()}
-                  </Descriptions.Item>
-                </Descriptions>
-              </Card>
-            </Col>
-          </Row>
-        </Card>
-      )}
-
-      {selectedTab === 'documents' && (
-        <Card title={`文档列表 (${documents.length})`}>
-          <Table
-            columns={documentsColumns}
-            dataSource={documents}
-            rowKey="id"
-            pagination={{ pageSize: 10 }}
-          />
-        </Card>
-      )}
-
-      {selectedTab === 'history' && (
-        <Card title="任务历史">
-          <Timeline mode="left">
-            {history.map(item => (
-              <Timeline.Item 
-                key={item.id}
-                label={item.time}
-              >
-                <p><strong>{item.action}</strong> - {item.operator}</p>
-                <p>{item.details}</p>
-              </Timeline.Item>
-            ))}
-          </Timeline>
-        </Card>
-      )}
-
-      {selectedTab === 'comments' && (
-        <Card title="讨论">
-          <div style={{ maxHeight: '400px', overflowY: 'auto', marginBottom: 16 }}>
-            {comments.map(comment => (
-              <div 
-                key={comment.id} 
-                style={{ 
-                  marginBottom: 16, 
-                  background: '#f5f5f5', 
-                  padding: 12, 
-                  borderRadius: 8 
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-                  <Avatar icon={<UserOutlined />} size="small" />
-                  <span style={{ fontWeight: 'bold', marginLeft: 8 }}>{comment.user}</span>
-                  <span style={{ marginLeft: 16, fontSize: 12, color: '#888' }}>{comment.time}</span>
-                </div>
-                <div>{comment.content}</div>
+        </div>
+        
+        <Divider />
+        
+        <Row gutter={16}>
+          <Col span={16}>
+            <Paragraph>{task.description}</Paragraph>
+          </Col>
+          <Col span={8}>
+            <Card size="small" title="任务进度">
+              <Progress percent={task.progress} status="active" />
+              <div style={{ textAlign: 'center', marginTop: 8 }}>
+                {task.progress < 100 ? (
+                  <Text type="secondary">
+                    <ClockCircleOutlined /> 进行中
+                  </Text>
+                ) : (
+                  <Text type="success">
+                    <CheckCircleOutlined /> 已完成
+                  </Text>
+                )}
               </div>
-            ))}
-          </div>
-          
-          <div style={{ display: 'flex', marginBottom: 8 }}>
-            <input
-              style={{ 
-                flex: 1, 
-                marginRight: 8, 
-                padding: '8px 12px',
-                borderRadius: 4,
-                border: '1px solid #d9d9d9'
-              }}
-              placeholder="添加评论..."
-              value={newComment}
-              onChange={e => setNewComment(e.target.value)}
-              onKeyPress={e => e.key === 'Enter' && handleAddComment()}
+            </Card>
+          </Col>
+        </Row>
+      </Card>
+      
+      <Tabs activeKey={activeTab} onChange={setActiveTab} style={{ marginTop: 16 }}>
+        <TabPane tab="任务信息" key="info">
+          <Card>
+            <Descriptions title="基本信息" bordered column={2}>
+              <Descriptions.Item label="任务ID">{task.id}</Descriptions.Item>
+              <Descriptions.Item label="状态">{getStatusTag(task.status)}</Descriptions.Item>
+              <Descriptions.Item label="创建时间">{task.createdAt}</Descriptions.Item>
+              <Descriptions.Item label="截止日期">{task.deadline}</Descriptions.Item>
+              <Descriptions.Item label="任务创建者">{task.createdBy}</Descriptions.Item>
+              <Descriptions.Item label="最后更新">{task.updatedAt}</Descriptions.Item>
+              <Descriptions.Item label="标注人员" span={2}>
+                <Avatar icon={<UserOutlined />} size="small" /> {task.assigneeName}
+              </Descriptions.Item>
+              <Descriptions.Item label="文档类型">{task.documentType}</Descriptions.Item>
+              <Descriptions.Item label="文档数量">{task.documentsCount}</Descriptions.Item>
+              <Descriptions.Item label="任务描述" span={2}>
+                {task.description}
+              </Descriptions.Item>
+            </Descriptions>
+            
+            <Divider />
+            
+            <Title level={4}>标注字段定义</Title>
+            <Table 
+              dataSource={task.annotation_fields}
+              rowKey="name"
+              pagination={false}
+              columns={[
+                {
+                  title: '字段名',
+                  dataIndex: 'name',
+                  key: 'name',
+                },
+                {
+                  title: '显示名称',
+                  dataIndex: 'label',
+                  key: 'label',
+                },
+                {
+                  title: '类型',
+                  dataIndex: 'type',
+                  key: 'type',
+                  render: (type) => fieldTypeMap[type] || type
+                },
+                {
+                  title: '必填',
+                  dataIndex: 'required',
+                  key: 'required',
+                  render: (required) => required ? 
+                    <Badge status="success" text="是" /> : 
+                    <Badge status="default" text="否" />
+                },
+                {
+                  title: '描述',
+                  dataIndex: 'description',
+                  key: 'description',
+                }
+              ]}
             />
-            <Button 
-              type="primary" 
-              icon={<SendOutlined />}
-              onClick={handleAddComment}
-            >
-              发送
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      <Modal
-        title="确认删除"
-        open={deleteModalVisible}
-        onOk={confirmDelete}
-        onCancel={() => setDeleteModalVisible(false)}
-      >
-        <p>确定要删除任务"{task.name}"吗？此操作无法撤销。</p>
-      </Modal>
+          </Card>
+        </TabPane>
+        
+        <TabPane tab="标注工作区" key="annotate">
+          <Card title="标注表单">
+            <Form layout="vertical">
+              {task.annotation_fields?.map((field: any) => (
+                <Form.Item 
+                  key={field.name}
+                  label={
+                    <Space>
+                      {field.label}
+                      {field.required && <Text type="danger">*</Text>}
+                    </Space>
+                  }
+                  help={field.description}
+                  validateStatus={
+                    validationResult?.errors?.some((err: any) => err.field === field.name) ? 'error' : undefined
+                  }
+                  extra={
+                    validationResult?.errors?.find((err: any) => err.field === field.name)?.message
+                  }
+                >
+                  {renderFieldControl(
+                    field, 
+                    annotationData[field.name], 
+                    (value) => handleFieldChange(field.name, value)
+                  )}
+                </Form.Item>
+              ))}
+              
+              <Divider />
+              
+              <Form.Item>
+                <Space>
+                  <Button type="primary" onClick={validateAnnotation}>
+                    验证数据
+                  </Button>
+                  <Button type="primary" onClick={submitAnnotation}>
+                    提交标注
+                  </Button>
+                </Space>
+              </Form.Item>
+              
+              {validationResult && (
+                <Alert
+                  message={validationResult.valid ? "数据验证通过" : "数据验证失败"}
+                  description={
+                    validationResult.valid ? 
+                      "所有字段都符合要求" : 
+                      <List
+                        size="small"
+                        dataSource={validationResult.errors}
+                        renderItem={(error: any) => (
+                          <List.Item>
+                            <Text type="danger">
+                              {`${task.annotation_fields.find((f: any) => f.name === error.field)?.label || error.field}: ${error.message}`}
+                            </Text>
+                          </List.Item>
+                        )}
+                      />
+                  }
+                  type={validationResult.valid ? "success" : "error"}
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                />
+              )}
+            </Form>
+          </Card>
+        </TabPane>
+        
+        <TabPane tab="文档列表" key="documents">
+          <Card>
+            <Table
+              dataSource={mockDocuments}
+              rowKey="id"
+              columns={[
+                {
+                  title: '文件名',
+                  dataIndex: 'name',
+                  key: 'name',
+                  render: (text) => (
+                    <Space>
+                      <FileTextOutlined />
+                      <Text>{text}</Text>
+                    </Space>
+                  )
+                },
+                {
+                  title: '标注状态',
+                  dataIndex: 'status',
+                  key: 'status',
+                  render: (status) => getDocumentStatusTag(status)
+                },
+                {
+                  title: '标注人员',
+                  dataIndex: 'annotatedBy',
+                  key: 'annotatedBy',
+                },
+                {
+                  title: '标注时间',
+                  dataIndex: 'annotatedAt',
+                  key: 'annotatedAt',
+                },
+                {
+                  title: '审核状态',
+                  dataIndex: 'reviewStatus',
+                  key: 'reviewStatus',
+                  render: (status) => getReviewStatusTag(status)
+                },
+                {
+                  title: '审核人员',
+                  dataIndex: 'reviewedBy',
+                  key: 'reviewedBy',
+                },
+                {
+                  title: '审核时间',
+                  dataIndex: 'reviewedAt',
+                  key: 'reviewedAt',
+                },
+                {
+                  title: '操作',
+                  key: 'action',
+                  render: (_, record) => (
+                    <Space>
+                      <Button 
+                        type="link" 
+                        size="small"
+                        icon={<FileSearchOutlined />}
+                      >
+                        查看
+                      </Button>
+                      {record.status !== 'completed' && (
+                        <Button 
+                          type="link" 
+                          size="small"
+                          icon={<EditOutlined />}
+                        >
+                          标注
+                        </Button>
+                      )}
+                      {record.status === 'completed' && record.reviewStatus !== 'approved' && (
+                        <Button 
+                          type="link" 
+                          size="small"
+                          icon={<CommentOutlined />}
+                        >
+                          审核
+                        </Button>
+                      )}
+                    </Space>
+                  )
+                },
+              ]}
+            />
+          </Card>
+        </TabPane>
+        
+        <TabPane tab="任务历史" key="history">
+          <Card>
+            <Timeline mode="left">
+              {mockHistory.map(record => (
+                <Timeline.Item 
+                  key={record.id}
+                  label={record.time}
+                >
+                  <p><strong>{record.action}</strong> - {record.operator}</p>
+                  <p>{record.details}</p>
+                </Timeline.Item>
+              ))}
+            </Timeline>
+          </Card>
+        </TabPane>
+      </Tabs>
     </div>
   );
 };
