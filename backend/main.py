@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api import auth, users, documents
+from app.api.api_v1.api import api_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -21,10 +21,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由
-app.include_router(auth.router, prefix="/api/auth", tags=["认证"])
-app.include_router(users.router, prefix="/api/users", tags=["用户"])
-app.include_router(documents.router, prefix="/api/documents", tags=["文档"])
+# 注册API v1路由
+app.include_router(api_router, prefix=settings.API_PREFIX)
 
 @app.get("/")
 async def root():

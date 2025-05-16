@@ -1,5 +1,6 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+import logging
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.document import Document, DocumentUpdate
@@ -17,6 +18,9 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.core.config import settings
 
+# 设置日志记录器
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 @router.post("/upload-validate", status_code=status.HTTP_200_OK)
@@ -24,39 +28,53 @@ async def validate_document(
     *,
     db: Session = Depends(get_db),
     file: UploadFile = File(...),
-    format: str = None,
+    format: Optional[str] = None,
     current_user: User = Depends(get_current_user)
 ):
     """
     验证上传的文档内容，但不保存到数据库
     """
-    # 验证文件类型
-    if not validate_file_type(file):
-        return {
-            "success": False,
-            "message": f"不支持的文件类型。允许的类型: {', '.join(settings.ALLOWED_EXTENSIONS)}"
-        }
-    
-    # 验证文件大小
-    file_size = 0
-    for chunk in file.file:
-        file_size += len(chunk)
+    try:
+        logger.debug(f"接收到文件上传验证请求: {file.filename}, 格式: {format}")
+        
+        # 验证文件类型
+        if not validate_file_type(file):
+            logger.warning(f"不支持的文件类型: {file.filename}")
+            return {
+                "success": False,
+                "message": f"不支持的文件类型。允许的类型: {', '.join(settings.ALLOWED_EXTENSIONS)}"
+            }
+        
+        # 将文件内容读入内存，避免文件指针问题
+        content = await file.read()
+        file_size = len(content)
+        
+        # 验证文件大小
         if file_size > settings.MAX_UPLOAD_SIZE:
+            logger.warning(f"文件过大: {file_size} 字节, 超过限制: {settings.MAX_UPLOAD_SIZE}")
             return {
                 "success": False,
                 "message": f"文件大小超过限制。最大允许: {settings.MAX_UPLOAD_SIZE} 字节"
             }
-    
-    # 重置文件指针
-    await file.seek(0)
-    
-    # 验证文档内容
-    validation_results = validate_document_content(file, format)
-    
-    return {
-        "success": True,
-        "results": validation_results
-    }
+        
+        # 重置文件指针
+        await file.seek(0)
+        
+        # 验证文档内容
+        logger.debug(f"开始验证文档内容: {file.filename}")
+        validation_results = validate_document_content(file, format)
+        logger.debug(f"验证完成: {validation_results}")
+        
+        return {
+            "success": True,
+            "results": validation_results
+        }
+    except Exception as e:
+        logger.exception(f"文件验证过程中发生异常: {str(e)}")
+        return {
+            "success": False,
+            "message": f"验证过程中发生错误: {str(e)}"
+        }
 
 @router.post("/", response_model=Document)
 async def upload_document(

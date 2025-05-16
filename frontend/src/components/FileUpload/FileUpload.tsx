@@ -29,7 +29,7 @@ interface UploadValidateResponse {
 
 const FileUpload: React.FC<FileUploadProps> = ({
   onSuccess,
-  supportedFormats = ['json', 'csv', 'xlsx', 'xls'],
+  supportedFormats = ['txt', 'pdf', 'docx', 'json', 'jsonl', 'py'],
 }) => {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -69,7 +69,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
     
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('format', selectedFormat);
+    if (selectedFormat) {
+      formData.append('format', selectedFormat);
+    }
     
     try {
       // 调试日志 - 请求前
@@ -80,6 +82,12 @@ const FileUpload: React.FC<FileUploadProps> = ({
       const token = localStorage.getItem('token');
       console.log("Token是否存在:", !!token);
       console.log("Token前10个字符:", token ? token.substring(0, 10) + "..." : "无token");
+      
+      // 调试formData内容
+      console.log("FormData内容:");
+      for (const pair of formData.entries()) {
+        console.log(pair[0] + ': ' + pair[1]);
+      }
       
       // 模拟进度条
       const progressInterval = setInterval(() => {
@@ -94,11 +102,11 @@ const FileUpload: React.FC<FileUploadProps> = ({
       }, 200);
       
       // 调用API上传并验证文件
-      const response = await api.post('/documents/upload-validate', formData, {
+      const response = await api.post(`/documents/upload-validate?format=${selectedFormat}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-      }) as UploadValidateResponse; // 类型断言
+      });
       
       clearInterval(progressInterval);
       setProgress(100);
