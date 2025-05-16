@@ -5,8 +5,9 @@ from sqlalchemy import pool
 
 from alembic import context
 from app.core.config import settings
-from app.db.session import Base
-from app.models.user import User  # 导入所有模型
+from app.db.base_class import Base
+# 导入所有模型，确保它们在Base中注册
+from app.db.base import Base  # 这已经包含了所有模型的导入
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
