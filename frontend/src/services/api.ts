@@ -1,6 +1,6 @@
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
 
-const baseURL = '/api';
+const baseURL = '/api/v1';
 
 // Create axios instance
 const api = axios.create({
@@ -27,7 +27,7 @@ api.interceptors.request.use(
 
 // Response interceptor
 api.interceptors.response.use(
-  (response) => {
+  (response: AxiosResponse) => {
     return response.data;
   },
   (error) => {

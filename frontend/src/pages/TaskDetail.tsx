@@ -485,7 +485,7 @@ const TaskDetail: React.FC = () => {
               </Descriptions>
             </Col>
             <Col span={8}>
-              <Card title="任务进度" bordered={false}>
+              <Card title="任务进度" variant="borderless">
                 <Progress
                   type="circle"
                   percent={task.progress}
@@ -604,4 +604,4 @@ const TaskDetail: React.FC = () => {
   );
 };
 
-export default TaskDetail; 
+export default TaskDetail;

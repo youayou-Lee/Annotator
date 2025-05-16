@@ -33,10 +33,11 @@ def create_document(
     if not validate_file_type(file):
         raise HTTPException(status_code=400, detail="不支持的文件类型")
     
-    # 验证文件大小（先读取内存流长度）
-    file.file.seek(0, 2)  # 移动到文件末尾
-    file_size = file.file.tell()
-    file.file.seek(0)     # 复位
+    # 读取文件内容到内存中，避免文件指针问题
+    content = file.file.read()
+    
+    # 验证文件大小
+    file_size = len(content)
     if not validate_file_size(file_size):
         raise HTTPException(status_code=400, detail="文件大小超出限制")
     
@@ -50,10 +51,10 @@ def create_document(
     # 保存文件
     file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
     with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(content)
     
-    # 获取文件大小（磁盘实际大小）
-    file_size = os.path.getsize(file_path)
+    # 使用内存中计算的文件大小，确保一致性
+    # 允许空文件上传（file_size可以为0）
     
     # 创建文档记录
     db_document = Document(
@@ -104,9 +105,33 @@ def delete_document(db: Session, document_id: int) -> Optional[Document]:
 
 def validate_file_type(file: UploadFile) -> bool:
     """验证文件类型是否允许"""
+    # 确保文件名存在
+    if not file.filename:
+        return False
+        
     file_extension = os.path.splitext(file.filename)[1].lower().lstrip('.')
+    # 允许空文件，只要扩展名正确
     return file_extension in settings.ALLOWED_EXTENSIONS
 
 def validate_file_size(file_size: int) -> bool:
-    """验证文件大小是否在限制范围内"""
-    return file_size <= settings.MAX_UPLOAD_SIZE 
+    """
+    验证文件大小是否在允许范围内
+    """
+    return file_size <= settings.MAX_UPLOAD_SIZE
+
+def validate_document_content(file: UploadFile, format: Optional[str] = None) -> List[dict]:
+    """
+    验证文档内容是否符合要求
+    返回验证结果列表
+    """
+    # 这里实现文档内容验证逻辑
+    # 根据不同的文件格式进行不同的验证
+    
+    # 示例：简单验证，实际项目中应该根据业务需求实现更复杂的验证
+    results = [{
+        "success": True,
+        "fileName": file.filename,
+        "errors": []
+    }]
+    
+    return results

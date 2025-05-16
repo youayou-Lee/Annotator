@@ -13,6 +13,20 @@ interface FileUploadProps {
   supportedFormats?: string[];
 }
 
+// 定义API响应类型
+interface UploadValidateResponse {
+  success: boolean;
+  message?: string;
+  results?: Array<{
+    success: boolean;
+    fileName?: string;
+    errors?: Array<{
+      line?: number;
+      message: string;
+    }>;
+  }>;
+}
+
 const FileUpload: React.FC<FileUploadProps> = ({
   onSuccess,
   supportedFormats = ['json', 'csv', 'xlsx', 'xls'],
@@ -58,6 +72,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
     formData.append('format', selectedFormat);
     
     try {
+      // 调试日志 - 请求前
+      console.log("正在发送请求到:", "/documents/upload-validate");
+      console.log("完整URL:", `${api.defaults.baseURL}/documents/upload-validate`);
+      
       // 模拟进度条
       const progressInterval = setInterval(() => {
         setProgress(prev => {
@@ -75,10 +93,13 @@ const FileUpload: React.FC<FileUploadProps> = ({
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-      });
+      }) as UploadValidateResponse; // 类型断言
       
       clearInterval(progressInterval);
       setProgress(100);
+      
+      // 调试日志 - 响应成功
+      console.log("上传响应:", response);
       
       if (response.success) {
         setValidationResults(response.results || []);
@@ -91,6 +112,12 @@ const FileUpload: React.FC<FileUploadProps> = ({
         onError(new Error(response.message || '验证失败'));
       }
     } catch (err: any) {
+      // 调试日志 - 错误详情
+      console.error("上传错误:", err);
+      console.error("错误响应:", err.response);
+      console.error("错误状态:", err.response?.status);
+      console.error("错误信息:", err.message);
+      
       setError(err.message || '上传失败');
       onError(err);
     } finally {
@@ -191,4 +218,4 @@ const FileUpload: React.FC<FileUploadProps> = ({
   );
 };
 
-export default FileUpload; 
+export default FileUpload;

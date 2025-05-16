@@ -10,13 +10,53 @@ from app.services.document import (
     update_document,
     delete_document,
     validate_file_type,
-    validate_file_size
+    validate_file_size,
+    validate_document_content
 )
 from app.core.security import get_current_user
 from app.models.user import User
 from app.core.config import settings
 
 router = APIRouter()
+
+@router.post("/upload-validate", status_code=status.HTTP_200_OK)
+async def validate_document(
+    *,
+    db: Session = Depends(get_db),
+    file: UploadFile = File(...),
+    format: str = None,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    验证上传的文档内容，但不保存到数据库
+    """
+    # 验证文件类型
+    if not validate_file_type(file):
+        return {
+            "success": False,
+            "message": f"不支持的文件类型。允许的类型: {', '.join(settings.ALLOWED_EXTENSIONS)}"
+        }
+    
+    # 验证文件大小
+    file_size = 0
+    for chunk in file.file:
+        file_size += len(chunk)
+        if file_size > settings.MAX_UPLOAD_SIZE:
+            return {
+                "success": False,
+                "message": f"文件大小超过限制。最大允许: {settings.MAX_UPLOAD_SIZE} 字节"
+            }
+    
+    # 重置文件指针
+    await file.seek(0)
+    
+    # 验证文档内容
+    validation_results = validate_document_content(file, format)
+    
+    return {
+        "success": True,
+        "results": validation_results
+    }
 
 @router.post("/", response_model=Document)
 async def upload_document(
@@ -131,4 +171,4 @@ def delete_document_endpoint(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="没有权限删除此文档"
         )
-    return delete_document(db=db, document_id=document_id) 
+    return delete_document(db=db, document_id=document_id)

@@ -22,7 +22,7 @@ const DocumentUpload: React.FC = () => {
       
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={16}>
-          <Card title="上传文件" bordered={false}>
+          <Card title="上传文件" variant="borderless">
             <FileUpload 
               onSuccess={handleUploadSuccess}
               supportedFormats={['json', 'csv', 'xlsx', 'py']}
@@ -31,7 +31,7 @@ const DocumentUpload: React.FC = () => {
         </Col>
         
         <Col xs={24} lg={8}>
-          <Card title="上传说明" bordered={false}>
+          <Card title="上传说明" variant="borderless">
             <Space direction="vertical">
               <Paragraph>
                 <strong>支持的文件格式：</strong>
@@ -87,4 +87,4 @@ const DocumentUpload: React.FC = () => {
   );
 };
 
-export default DocumentUpload; 
+export default DocumentUpload;
