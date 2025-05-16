@@ -26,7 +26,12 @@ const App: React.FC = () => {
       }}
     >
       <AntdApp>
-        <BrowserRouter>
+        <BrowserRouter
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true
+          }}
+        >
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route

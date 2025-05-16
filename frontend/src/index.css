@@ -10,3 +10,15 @@ body {
 #root {
   height: 100%;
 }
+
+/* 只有在系统启用强制色彩模式时才应用这些样式 */
+@media (forced-colors: active) {
+  /* 这些样式只会在Windows高对比度模式下生效 */
+  .ant-btn,
+  .ant-input,
+  .ant-select,
+  .ant-menu,
+  .ant-table {
+    forced-color-adjust: auto;
+  }
+}
