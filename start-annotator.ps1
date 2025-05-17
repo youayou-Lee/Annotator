@@ -1,5 +1,6 @@
+# GBK2312
 # PowerShell 脚本：一键启动文书标注系统前端和后端
-# 执行策略设置：如果遇到无法执行的问题，请先在管理员PowerShell中运行: Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+# 此脚本仅适用于人为调用，不适用AI调用。
 
 # 配置颜色输出
 function Write-ColorOutput {

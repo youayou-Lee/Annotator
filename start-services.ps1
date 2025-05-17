@@ -1,6 +1,5 @@
-# 后台启动服务脚本
-# 使用UTF-8编码执行命令，确保输出正确
-$OutputEncoding = [System.Text.Encoding]::UTF8
+# 后台启动服务脚本-此脚本适用于AI调用。
+# GBK2312
 
 Write-Host "正在准备启动服务..." -ForegroundColor Cyan
 
