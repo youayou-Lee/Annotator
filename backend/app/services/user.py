@@ -87,9 +87,16 @@ def delete_user(db: Session, user_id: int) -> Optional[User]:
     db.commit()
     return db_user
 
-def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+def authenticate_user(db: Session, username_or_email: str, password: str) -> Optional[User]:
     from app.core.security import verify_password
-    user = get_user_by_email(db, email)
+    
+    # 尝试通过邮箱查找用户
+    user = get_user_by_email(db, username_or_email)
+    
+    # 如果通过邮箱未找到，尝试通过用户名查找
+    if not user:
+        user = get_user_by_username(db, username_or_email)
+    
     if not user:
         return None
     if not verify_password(password, user.hashed_password):

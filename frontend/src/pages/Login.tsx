@@ -26,8 +26,8 @@ const Login: React.FC = () => {
       // 向后端发送登录请求
       console.log('Login form submitted:', values);
       
-      // 将表单数据转换为FormData格式（OAuth2要求）
-      const formData = new FormData();
+      // 将表单数据转换为URLSearchParams格式（OAuth2要求）
+      const formData = new URLSearchParams();
       formData.append('username', values.username);
       formData.append('password', values.password);
       

@@ -61,7 +61,7 @@ def register(
         )
     
     # 检查超级管理员权限
-    if user_in.role == UserRole.SUPERUSER:
+    if user_in.role == UserRole.superuser:
         # 检查系统中是否已存在超级管理员
         superuser = get_superuser(db)
         if superuser:
@@ -83,7 +83,7 @@ def get_pending_admin_users(
     """
     获取待审批的管理员用户列表（仅超级管理员可访问）
     """
-    if current_user.role != UserRole.SUPERUSER:
+    if current_user.role != UserRole.superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="没有权限访问此资源"
@@ -101,7 +101,7 @@ def approve_admin_user(
     """
     批准或拒绝管理员用户的注册请求（仅超级管理员可访问）
     """
-    if current_user.role != UserRole.SUPERUSER:
+    if current_user.role != UserRole.superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="只有超级管理员可以批准管理员注册"

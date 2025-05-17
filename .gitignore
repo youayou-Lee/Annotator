@@ -48,8 +48,7 @@ exampleData/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Cursor临时文件
-.cursor/
+
 
 # 其他
 .DS_Store
