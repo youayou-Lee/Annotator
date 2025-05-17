@@ -20,12 +20,6 @@ wheels/
 .installed.cfg
 *.egg
 
-# 虚拟环境
-env/
-venv/
-ENV/
-.env/
-.venv/
 
 # 数据库
 *.db
@@ -46,29 +40,13 @@ exampleData/
 # 编辑器/IDE
 .idea/
 .vscode/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
 
 # 测试
-.coverage
-htmlcov/
 .pytest_cache/
-.tox/
-nosetests.xml
-coverage.xml
-*.cover
+
 
 # Jupyter Notebook
 .ipynb_checkpoints
-
-# 环境配置
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
 # Cursor临时文件
 .cursor/
