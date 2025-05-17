@@ -1,9 +1,147 @@
 ---
 description: 
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
-# 该项目运行于Windows操作系统，控制台命令应该符合对应规范
-- 当需要执行多个命令时，应该多次执行，不要使用 && 
-- 为了避免你烦这个错误，你运行项目前后端分别调用 .\run-frontend.ps1 和 .\run-backend.ps1 脚本而非 直接使用命令
-- 执行命令时注意路径的问题，当找不到文件时就观察一下文件列表下的内容
+# 后台运行服务技术规范
+
+本文档定义了在Windows PowerShell环境中后台运行服务的标准方法，确保AI助手和用户交互不被阻塞。
+
+## 1. 基本原则
+
+当需要启动前后端服务或任何长时间运行的命令时，应遵循以下原则：
+
+1. **使用后台作业**：所有长时间运行的命令应作为PowerShell作业在后台运行
+2. **避免使用阻塞命令**：不直接执行会阻塞控制台的命令
+3. **保留日志访问**：确保可以随时查看服务输出
+4. **支持会话管理**：提供启动、停止和监控服务的方法
+
+## 2. 推荐方法
+
+### 2.1 使用Start-Job启动后台服务
+
+```powershell
+# 启动后端服务
+$backendJob = Start-Job -ScriptBlock {
+    Set-Location $using:PWD
+    & ".\run-backend.ps1"
+}
+
+# 启动前端服务
+$frontendJob = Start-Job -ScriptBlock {
+    Set-Location $using:PWD
+    & ".\run-frontend.ps1"
+}
+
+# 输出作业ID
+Write-Host "Backend job ID: $($backendJob.Id)"
+Write-Host "Frontend job ID: $($frontendJob.Id)"
+```
+
+### 2.2 使用专用脚本
+
+推荐使用`start-background.ps1`脚本启动服务：
+
+```powershell
+.\start-background.ps1
+```
+
+此脚本会：
+- 在后台启动前后端服务
+- 显示作业ID供后续使用
+- 允许同时继续执行其他命令
+
+## 3. 服务管理命令
+
+### 3.1 查看服务状态
+
+```powershell
+# 查看所有后台作业
+Get-Job
+
+# 格式化显示
+Get-Job | Format-Table -Property Id, Name, State
+```
+
+### 3.2 查看服务日志
+
+```powershell
+# 查看后端日志（假设ID为1）
+Receive-Job -Id 1 -Keep
+
+# 查看最近20行
+Receive-Job -Id 1 -Keep | Select-Object -Last 20
+
+# 查看前端日志（假设ID为2）
+Receive-Job -Id 2 -Keep
+```
+
+### 3.3 停止服务
+
+```powershell
+# 停止特定服务
+Stop-Job -Id 1  # 停止后端
+Stop-Job -Id 2  # 停止前端
+
+# 停止所有服务
+Get-Job | Stop-Job
+```
+
+### 3.4 删除作业
+
+```powershell
+# 删除特定作业
+Remove-Job -Id 1
+
+# 删除所有完成的作业
+Get-Job | Where-Object { $_.State -eq "Completed" } | Remove-Job
+```
+
+## 4. 示例工作流
+
+### 4.1 开始一个完整的工作会话
+
+```powershell
+# 1. 启动服务
+.\start-background.ps1
+
+# 2. 检查服务状态
+Get-Job
+
+# 3. 执行其他命令（不会被阻塞）
+python check_db.py
+
+# 4. 需要时查看日志
+Receive-Job -Id 1 -Keep | Select-Object -Last 10
+```
+
+### 4.2 结束工作会话
+
+```powershell
+# 停止所有服务
+Get-Job | Stop-Job
+
+# 清理作业
+Get-Job | Remove-Job
+```
+
+## 5. 故障排除
+
+如果服务未正常启动或运行：
+
+1. 检查作业状态：`Get-Job`
+2. 查看完整日志：`Receive-Job -Id <作业ID> -Keep`
+3. 停止并重启有问题的服务：
+   ```powershell
+   Stop-Job -Id <作业ID>
+   Remove-Job -Id <作业ID>
+   # 重新启动服务
+   ```
+
+## 6. 注意事项
+
+- 作业ID在每次会话中都会变化
+- 确保在正确的目录中启动服务
+- 如需更详细的日志，可修改启动脚本增加日志记录功能
+- 当需要执行多条命令时逐个执行，不得使用&&
+
