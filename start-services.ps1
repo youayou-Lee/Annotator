@@ -1,5 +1,5 @@
 # 后台启动服务脚本-此脚本适用于AI调用。
-# GBK2312
+# GBK2312  如果出现乱码就以GBK2312编码重新打开
 
 Write-Host "正在准备启动服务..." -ForegroundColor Cyan
 
