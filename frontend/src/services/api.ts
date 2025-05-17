@@ -37,24 +37,24 @@ api.interceptors.request.use(
       config.url = ensureTrailingSlash(config.url);
     }
     
+    // 获取token
+    const token = localStorage.getItem('token');
+    
     // 请求调试日志
     console.debug('API请求:', config.method?.toUpperCase(), 
                  (config.baseURL || '') + (config.url || ''));
-    
-    // 在开发环境中使用临时令牌，生产环境中使用localStorage中的token
-    const isDev = process.env.NODE_ENV === 'development';
-    const token = isDev ? DEV_TOKEN : localStorage.getItem('token');
+    console.debug('当前token:', token);
     
     if (config.headers) {
-      // 添加开发环境标记
-      if (isDev) {
-        config.headers['X-Environment'] = 'development';
-      }
-      
       if (token) {
+        // 确保Authorization头使用Bearer方式
         config.headers.Authorization = `Bearer ${token}`;
+        console.debug('设置Authorization头:', config.headers.Authorization);
+      } else {
+        console.warn('请求无token，可能导致认证失败:', config.url);
       }
     }
+    
     return config;
   },
   (error) => {
@@ -91,6 +91,13 @@ api.interceptors.response.use(
         case 401:
           console.warn('认证失败: 401 Unauthorized. 请先登录获取有效token。');
           console.warn('在实际项目中，这里会自动跳转到登录页面。');
+          
+          // 清除无效token
+          if (localStorage.getItem('token')) {
+            console.warn('检测到过期或无效的token，正在清除...');
+            localStorage.removeItem('token');
+            localStorage.removeItem('refresh_token');
+          }
           break;
         case 403:
           console.error('权限不足:', errorData);

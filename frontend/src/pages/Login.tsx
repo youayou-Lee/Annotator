@@ -34,16 +34,20 @@ const Login: React.FC = () => {
       // 调用登录API - 由于api.ts中的拦截器，此处直接得到的是response.data
       const data = await api.post<LoginResponse>('/auth/login', formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
       });
+      
+      console.log('登录响应数据:', data);
       
       // 存储token
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('refresh_token', data.refresh_token);
       
       message.success('登录成功');
-      navigate('/');
+      
+      // 使用location.href刷新页面，确保新token被应用
+      window.location.href = '/';
     } catch (error: any) {
       message.error(error.response?.data?.detail || '登录失败，请检查用户名和密码');
       console.error('Login error:', error);
