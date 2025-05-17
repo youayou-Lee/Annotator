@@ -34,6 +34,7 @@ os.environ["CELERY_TASK_SERIALIZER"] = "json"
 os.environ["CELERY_RESULT_SERIALIZER"] = "json"
 os.environ["CELERY_ACCEPT_CONTENT"] = "[\"json\"]"
 os.environ["CELERY_TIMEZONE"] = "UTC"
+os.environ["DATABASE_URL"] = "postgresql://test_user:test_password@localhost:5432/test_db"
 
 main_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../app/main.py"))
 spec = importlib.util.spec_from_file_location("main", main_path)
@@ -45,19 +46,14 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.api.deps import get_db
 from app.core.config import settings
 from tests.utils.utils import get_superuser_token_headers
 
-# 用内存数据库+StaticPool，保证所有连接共享同一内存
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool
-)
+# 使用PostgreSQL测试数据库
+SQLALCHEMY_DATABASE_URL = f"postgresql://{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}@{os.environ['POSTGRES_HOST']}:{os.environ['POSTGRES_PORT']}/{os.environ['POSTGRES_DB']}"
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # 关键：强制覆盖 app.db.session.SessionLocal
@@ -81,6 +77,8 @@ settings.LOG_FILE = "test.log"
 
 @pytest.fixture(scope="function")
 def db():
+    # 使用指定schema创建临时测试表
+    # 注意：这种方式虽然会删除测试表但不会创建/删除数据库，需确保test_db已存在
     Base.metadata.drop_all(bind=engine)
     # 自动创建所有表，避免依赖顺序问题
     Base.metadata.create_all(bind=engine)

@@ -2,198 +2,124 @@
 # -*- coding: utf-8 -*-
 
 """
-PostgreSQL数据库创建和初始化脚本
-用于创建数据库、表结构并导入初始数据
+PostgreSQL数据库初始化脚本
+用于创建数据库和初始化表结构
 """
 
 import os
 import sys
-import psycopg2
-from psycopg2 import OperationalError
 from sqlalchemy import create_engine, text
+import bcrypt
+from datetime import datetime
 
-# 导入环境变量配置
+# 添加项目根目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:
-    from app.core.config import settings
-    from app.db.base_class import Base
-    from app.models.user import User
-    from app.models.task import Task
-    from app.models.document import Document
-    from app.models.annotation import Annotation
-    from app.core.security import get_password_hash
-    USING_APP_CONFIG = True
-except ImportError:
-    USING_APP_CONFIG = False
-    from dotenv import load_dotenv
-    load_dotenv()
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-def get_connection_params():
-    """从配置或环境变量获取数据库连接参数"""
-    # 硬编码正确的参数
-    return {
-        "dbname": "postgres",  # 连接默认数据库创建新库
-        "user": "postgres",
-        "password": "123456",
-        "host": "localhost",
-        "port": "5432"
-    }
-
-def get_db_name():
-    """获取要创建的数据库名称"""
-    return "annotator"
+from app.core.config import settings
+from app.db.base_class import Base
+from app.db.session import engine
+from app.models.user import User
+# 确保所有模型都被导入，这样Base.metadata才包含所有表
+from app.db.base import Base  # 这会导入所有模型
 
 def create_database():
-    """创建PostgreSQL数据库"""
-    params = get_connection_params()
-    db_name = get_db_name()
+    """创建数据库"""
+    # 获取PostgreSQL连接信息
+    pg_url = settings.SQLALCHEMY_DATABASE_URI
+    db_name = settings.POSTGRES_DB
     
-    print("=" * 50)
-    print("PostgreSQL 数据库创建")
-    print("=" * 50)
-    print(f"连接参数: {params}")
-    print(f"要创建的数据库: {db_name}")
-    print("-" * 50)
+    # 创建一个连接到postgres数据库的引擎，用于创建新数据库
+    base_url = pg_url.rsplit('/', 1)[0] + '/postgres'
+    base_engine = create_engine(base_url)
+    
+    print(f"正在检查数据库 '{db_name}' 是否存在...")
     
     try:
-        # 连接到默认数据库
-        conn = psycopg2.connect(
-            dbname=params["dbname"],
-            user=params["user"],
-            password=params["password"],
-            host=params["host"],
-            port=params["port"]
-        )
-        conn.autocommit = True
-        cursor = conn.cursor()
-        
-        # 检查数据库是否已存在
-        cursor.execute(f"SELECT 1 FROM pg_database WHERE datname = '{db_name}'")
-        exists = cursor.fetchone()
-        
-        if exists:
-            print(f"数据库 '{db_name}' 已存在")
-        else:
-            # 创建数据库
-            cursor.execute(f"CREATE DATABASE {db_name}")
-            print(f"✅ 成功创建数据库 '{db_name}'")
-        
-        cursor.close()
-        conn.close()
-        
-        return True
-    
-    except OperationalError as e:
-        print("❌ 连接失败!")
-        print(f"错误信息: {str(e)}")
-        print("\n可能的原因:")
-        print(" - PostgreSQL服务未启动")
-        print(" - 数据库连接参数不正确")
-        print(" - 权限不足")
-        print("\n解决方案:")
-        print(" 1. 确保PostgreSQL服务已启动")
-        print(" 2. 检查连接参数是否正确")
-        print(" 3. 使用具有创建数据库权限的用户")
-        return False
+        with base_engine.connect() as conn:
+            # 检查数据库是否存在
+            result = conn.execute(text(f"SELECT 1 FROM pg_database WHERE datname = '{db_name}'"))
+            exists = result.scalar() is not None
+            
+            if exists:
+                print(f"数据库 '{db_name}' 已存在.")
+            else:
+                print(f"数据库 '{db_name}' 不存在，正在创建...")
+                # 创建新的连接，因为我们不能在事务中创建数据库
+                conn.execution_options(isolation_level="AUTOCOMMIT").execute(text(f"CREATE DATABASE {db_name}"))
+                print(f"数据库 '{db_name}' 创建成功！")
     
     except Exception as e:
-        print("❌ 发生未知错误!")
-        print(f"错误信息: {str(e)}")
-        import traceback
-        print("\n详细错误信息:")
-        traceback.print_exc()
+        print(f"创建数据库时出错: {str(e)}")
         return False
-
-def initialize_tables():
-    """初始化数据库表结构"""
-    db_name = get_db_name()
-    db_user = "postgres"
-    db_pass = "123456"
-    db_host = "localhost"
-    db_port = "5432"
     
-    print("\n" + "=" * 50)
-    print("数据库表初始化")
-    print("=" * 50)
+    return True
+
+def init_database():
+    """初始化数据库表结构"""
+    print("正在初始化数据库表结构...")
     
     try:
-        # 创建数据库引擎
-        engine_url = f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
-        engine = create_engine(engine_url)
-        
         # 创建所有表
         Base.metadata.create_all(bind=engine)
-        print("✅ 成功创建所有表")
-        
+        print("数据库表创建成功！")
         return True
-    
     except Exception as e:
-        print("❌ 表初始化失败!")
-        print(f"错误信息: {str(e)}")
-        import traceback
-        print("\n详细错误信息:")
-        traceback.print_exc()
+        print(f"创建数据库表时出错: {str(e)}")
         return False
 
 def create_admin_user():
     """创建管理员用户"""
-    db_name = get_db_name()
-    db_user = "postgres"
-    db_pass = "123456"
-    db_host = "localhost"
-    db_port = "5432"
+    from sqlalchemy.orm import sessionmaker
     
-    print("\n" + "=" * 50)
-    print("创建管理员用户")
-    print("=" * 50)
-    
-    # 管理员信息
-    admin_email = "admin@example.com"
-    admin_username = "admin"
-    admin_password = "password"
+    # 创建会话
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
     
     try:
-        # 创建数据库引擎
-        engine_url = f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
-        engine = create_engine(engine_url)
+        # 检查是否已存在管理员用户
+        admin = db.query(User).filter(User.email == "admin@example.com").first()
         
-        # 检查用户是否存在
-        with engine.connect() as conn:
-            result = conn.execute(text(f"SELECT 1 FROM users WHERE email = '{admin_email}'"))
-            user_exists = result.fetchone() is not None
+        if admin:
+            print("管理员用户已存在.")
+        else:
+            print("正在创建管理员用户...")
+            # 生成密码哈希
+            hashed_password = bcrypt.hashpw("admin".encode(), bcrypt.gensalt()).decode()
             
-            if user_exists:
-                print(f"管理员用户 '{admin_email}' 已存在")
-            else:
-                # 创建管理员用户
-                hashed_password = get_password_hash(admin_password)
-                conn.execute(text(f"""
-                    INSERT INTO users (email, username, hashed_password, is_active, is_superuser)
-                    VALUES ('{admin_email}', '{admin_username}', '{hashed_password}', true, true)
-                """))
-                conn.commit()
-                print(f"✅ 成功创建管理员用户:")
-                print(f" - 邮箱: {admin_email}")
-                print(f" - 用户名: {admin_username}")
-                print(f" - 密码: {admin_password}")
+            # 创建管理员用户
+            admin = User(
+                email="admin@example.com",
+                username="admin",
+                hashed_password=hashed_password,
+                is_active=True,
+                is_superuser=True
+            )
+            
+            db.add(admin)
+            db.commit()
+            print("管理员用户创建成功！")
+            print("用户名: admin@example.com")
+            print("密码: admin")
         
         return True
-    
     except Exception as e:
-        print("❌ 创建管理员用户失败!")
-        print(f"错误信息: {str(e)}")
-        import traceback
-        print("\n详细错误信息:")
-        traceback.print_exc()
+        db.rollback()
+        print(f"创建管理员用户时出错: {str(e)}")
         return False
+    finally:
+        db.close()
 
-def initialize_database():
-    """初始化整个数据库"""
-    if create_database():
-        if initialize_tables():
-            create_admin_user()
-    
-    print("\n完成!")
-    
 if __name__ == "__main__":
-    initialize_database() 
+    print("=" * 50)
+    print("PostgreSQL 数据库初始化")
+    print("=" * 50)
+    
+    if create_database():
+        if init_database():
+            if create_admin_user():
+                print("\n✅ 数据库初始化完成！")
+                sys.exit(0)
+    
+    print("\n❌ 数据库初始化失败！")
+    sys.exit(1) 

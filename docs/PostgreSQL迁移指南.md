@@ -54,7 +54,7 @@ python create_postgres_db.py
 该脚本会：
 - 创建名为 `annotator` 的PostgreSQL数据库（如果不存在）
 - 根据模型定义创建所有表
-- 创建默认管理员用户（admin@example.com / password）
+- 创建默认管理员用户（admin@example.com / admin）
 
 #### 验证数据库连接
 
@@ -118,9 +118,11 @@ cd ..
 
 如果遇到连接问题，请验证 `.env` 文件中的连接参数是否正确：
 
-- 用户名和密码
-- 主机名和端口
-- 数据库名称
+- 用户名: postgres
+- 密码: 123456
+- 主机名: localhost
+- 端口: 5432
+- 数据库名称: annotator
 
 ### 手动创建数据库
 

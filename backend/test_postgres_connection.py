@@ -8,108 +8,61 @@ PostgreSQL数据库连接测试脚本
 
 import os
 import sys
-import psycopg2
-from psycopg2 import OperationalError
+from sqlalchemy import create_engine, text
 
-# 导入环境变量配置
+# 添加项目根目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:
-    from app.core.config import settings
-    USING_APP_CONFIG = True
-except ImportError:
-    USING_APP_CONFIG = False
-    from dotenv import load_dotenv
-    load_dotenv()
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-def get_connection_params():
-    """从配置或环境变量获取数据库连接参数"""
-    # 直接读取.env文件
-    with open('.env', 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#'):
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    os.environ[key] = value
+from app.core.config import settings
 
-    # 硬编码正确的参数
-    return {
-        "dbname": "annotator",
-        "user": "postgres",
-        "password": "123456",
-        "host": "localhost",
-        "port": "5432"
-    }
-
-def get_connection_string():
-    """获取数据库连接字符串"""
-    if USING_APP_CONFIG:
-        return settings.DATABASE_URL
-    else:
-        return os.getenv("DATABASE_URL", "postgresql://postgres:123456@localhost:5432/annotator")
-
-def test_connection():
-    """测试数据库连接"""
-    params = get_connection_params()
-    
+def test_postgres_connection():
+    """测试PostgreSQL连接"""
     print("=" * 50)
     print("PostgreSQL 连接测试")
     print("=" * 50)
-    print(f"连接参数: {params}")
-    print(f"连接字符串: postgresql://{params['user']}:{params['password']}@{params['host']}:{params['port']}/{params['dbname']}")
+    print(f"连接字符串: {settings.SQLALCHEMY_DATABASE_URI}")
     print("-" * 50)
     
     try:
-        # 尝试连接
-        conn = psycopg2.connect(
-            dbname=params["dbname"],
-            user=params["user"],
-            password=params["password"],
-            host=params["host"],
-            port=params["port"]
-        )
+        # 创建数据库引擎
+        engine = create_engine(settings.SQLALCHEMY_DATABASE_URI)
         
-        # 获取数据库版本
-        cursor = conn.cursor()
-        cursor.execute("SELECT version();")
-        version = cursor.fetchone()
-        
-        # 获取数据库表信息
-        cursor.execute("""
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public'
-            ORDER BY table_name;
-        """)
-        tables = cursor.fetchall()
-        
-        print("✅ 连接成功!")
-        print(f"数据库版本: {version[0]}")
-        print("\n数据库表:")
-        if tables:
-            for table in tables:
-                print(f" - {table[0]}")
-        else:
-            print(" - 没有找到表")
-        
-        # 检查是否有users表并有记录
-        if any(table[0] == 'users' for table in tables):
-            cursor.execute("SELECT COUNT(*) FROM users;")
-            user_count = cursor.fetchone()[0]
-            print(f"\nusers表中的用户数量: {user_count}")
+        # 测试连接
+        with engine.connect() as connection:
+            # 获取数据库版本
+            result = connection.execute(text("SELECT version();"))
+            version = result.fetchone()[0]
+            print(f"✅ 连接成功! PostgreSQL版本: {version}")
             
-            if user_count > 0:
-                cursor.execute("SELECT id, email, username FROM users LIMIT 5;")
-                users = cursor.fetchall()
-                print("\n用户列表 (前5个):")
-                for user in users:
-                    print(f" - ID: {user[0]}, 邮箱: {user[1]}, 用户名: {user[2]}")
-        
-        # 关闭连接
-        cursor.close()
-        conn.close()
-        
-    except OperationalError as e:
+            # 测试数据库用户
+            result = connection.execute(text("SELECT current_user;"))
+            user = result.fetchone()[0]
+            print(f"当前数据库用户: {user}")
+            
+            # 检查当前数据库
+            result = connection.execute(text("SELECT current_database();"))
+            db = result.fetchone()[0]
+            print(f"当前数据库: {db}")
+            
+            # 检查数据库表
+            result = connection.execute(text("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+                ORDER BY table_name;
+            """))
+            tables = result.fetchall()
+            
+            print("\n数据库表:")
+            if tables:
+                for table in tables:
+                    print(f" - {table[0]}")
+            else:
+                print(" - 没有找到表")
+            
+            return True
+    except Exception as e:
         print("❌ 连接失败!")
         print(f"错误信息: {str(e)}")
         print("\n可能的原因:")
@@ -122,14 +75,8 @@ def test_connection():
         print(" 2. 检查连接参数是否正确")
         print(" 3. 创建数据库: CREATE DATABASE annotator;")
         print(" 4. 确保防火墙允许连接")
-        
-    except Exception as e:
-        print("❌ 发生未知错误!")
-        print(f"错误信息: {str(e)}")
-        print(f"错误类型: {type(e).__name__}")
-        import traceback
-        print("\n详细错误信息:")
-        traceback.print_exc()
+        return False
 
 if __name__ == "__main__":
-    test_connection() 
+    success = test_postgres_connection()
+    sys.exit(0 if success else 1) 

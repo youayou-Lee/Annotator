@@ -1,6 +1,6 @@
 from typing import List, Optional
 from pydantic_settings import BaseSettings
-from pydantic import AnyHttpUrl, validator
+from pydantic import AnyHttpUrl, field_validator
 
 class Settings(BaseSettings):
     # 应用配置
@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # CORS配置
     CORS_ORIGINS: List[AnyHttpUrl] = []
 
-    @validator("CORS_ORIGINS", pre=True)
+    @field_validator("CORS_ORIGINS", mode="before")
     def assemble_cors_origins(cls, v: str | List[str]) -> List[str] | str:
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
@@ -22,7 +22,7 @@ class Settings(BaseSettings):
         raise ValueError(v)
 
     # 数据库配置
-    DATABASE_URL: str = "sqlite:///./annotator.db"
+    DATABASE_URL: str = "postgres://postgres:postgres@localhost:5432/annotator"
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
@@ -31,7 +31,9 @@ class Settings(BaseSettings):
 
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        return self.DATABASE_URL
+        # 使用PostgreSQL参数构建连接URL
+        postgres_url = f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        return postgres_url
 
     # Redis配置
     REDIS_URL: str
