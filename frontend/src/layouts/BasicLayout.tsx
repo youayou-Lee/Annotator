@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout, Menu, Typography, Avatar, Dropdown, Button, theme } from 'antd';
 import {
   MenuFoldOutlined,
@@ -9,8 +9,11 @@ import {
   BookOutlined,
   LogoutOutlined,
   FolderOpenOutlined,
+  AuditOutlined,
 } from '@ant-design/icons';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useUserInfo } from '../App';
+import api from '../services/api';
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -18,6 +21,7 @@ const BasicLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { userInfo, loading } = useUserInfo();
   
   const { token } = theme.useToken();
 
@@ -34,7 +38,8 @@ const BasicLayout: React.FC = () => {
     },
   ];
 
-  const menuItems = [
+  // 基础菜单项
+  const baseMenuItems = [
     {
       key: 'dashboard',
       icon: <BookOutlined />,
@@ -53,13 +58,46 @@ const BasicLayout: React.FC = () => {
       label: '公共文件库',
       path: '/public-files',
     },
+  ];
+
+  // 管理员菜单项
+  const adminMenuItems = [
     {
       key: 'users',
       icon: <TeamOutlined />,
       label: '用户管理',
       path: '/users',
+      roles: ['admin', 'superuser'],
     },
   ];
+
+  // 超级管理员菜单项
+  const superuserMenuItems = [
+    {
+      key: 'admin-approval',
+      icon: <AuditOutlined />,
+      label: '管理员审批',
+      path: '/admin-approval',
+      roles: ['superuser'],
+    },
+  ];
+
+  // 根据用户角色获取菜单项
+  const getMenuItems = () => {
+    let items = [...baseMenuItems];
+    
+    if (userInfo) {
+      if (['admin', 'superuser'].includes(userInfo.role)) {
+        items = [...items, ...adminMenuItems];
+      }
+      
+      if (userInfo.role === 'superuser') {
+        items = [...items, ...superuserMenuItems];
+      }
+    }
+    
+    return items;
+  };
 
   const handleUserMenuClick = (key: string) => {
     if (key === 'profile') {
@@ -67,9 +105,14 @@ const BasicLayout: React.FC = () => {
     } else if (key === 'logout') {
       // Logout logic
       localStorage.removeItem('token');
+      localStorage.removeItem('refresh_token');
       navigate('/login');
     }
   };
+
+  if (loading) {
+    return <div>加载中...</div>;
+  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -100,7 +143,7 @@ const BasicLayout: React.FC = () => {
           theme="light"
           mode="inline"
           selectedKeys={[location.pathname.split('/')[1] || 'dashboard']}
-          items={menuItems.map(item => ({
+          items={getMenuItems().map(item => ({
             key: item.key,
             icon: item.icon,
             label: <Link to={item.path}>{item.label}</Link>,
@@ -136,7 +179,11 @@ const BasicLayout: React.FC = () => {
                 alignItems: 'center' 
               }}>
                 <Avatar icon={<UserOutlined />} />
-                <span style={{ marginLeft: 8 }}>管理员</span>
+                <span style={{ marginLeft: 8 }}>
+                  {userInfo ? userInfo.username : '用户'} 
+                  {userInfo && userInfo.role === 'superuser' && '(超级管理员)'}
+                  {userInfo && userInfo.role === 'admin' && '(管理员)'}
+                </span>
               </div>
             </Dropdown>
           </div>

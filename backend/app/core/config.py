@@ -22,7 +22,7 @@ class Settings(BaseSettings):
         raise ValueError(v)
 
     # 数据库配置
-    DATABASE_URL: str = "postgres://postgres:postgres@localhost:5432/annotator"
+    DATABASE_URL: str = "postgresql://postgres:123456@localhost:5432/annotator"
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str

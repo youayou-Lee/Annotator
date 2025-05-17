@@ -9,10 +9,21 @@ PostgreSQL数据库连接测试脚本
 import os
 import sys
 from sqlalchemy import create_engine, text
+from dotenv import load_dotenv
 
 # 添加项目根目录到Python路径
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, ROOT_DIR)
+
+# 手动加载.env文件
+ENV_FILE = os.path.join(ROOT_DIR, '.env')
+print(f"尝试加载.env文件: {ENV_FILE}")
+if os.path.exists(ENV_FILE):
+    print(f".env文件存在: {ENV_FILE}")
+    load_dotenv(ENV_FILE)
+else:
+    print(f"警告: .env文件不存在: {ENV_FILE}")
 
 from app.core.config import settings
 
@@ -21,7 +32,32 @@ def test_postgres_connection():
     print("=" * 50)
     print("PostgreSQL 连接测试")
     print("=" * 50)
-    print(f"连接字符串: {settings.SQLALCHEMY_DATABASE_URI}")
+    
+    # 打印环境变量和配置信息
+    print(f"当前目录: {os.getcwd()}")
+    print(f"当前环境变量DATABASE_URL: {os.getenv('DATABASE_URL', '未设置')}")
+    
+    # 打印配置中的连接信息
+    print(f"配置中的DATABASE_URL: {settings.DATABASE_URL}")
+    print(f"实际使用的连接字符串: {settings.SQLALCHEMY_DATABASE_URI}")
+    print(f"用户名: {settings.POSTGRES_USER}")
+    print(f"密码: {'*' * len(settings.POSTGRES_PASSWORD) if settings.POSTGRES_PASSWORD else '未设置'} (长度: {len(settings.POSTGRES_PASSWORD) if settings.POSTGRES_PASSWORD else 0})")
+    print(f"数据库: {settings.POSTGRES_DB}")
+    print(f"主机: {settings.POSTGRES_HOST}")
+    print(f"端口: {settings.POSTGRES_PORT}")
+    
+    # 尝试从.env文件创建连接
+    env_db_url = os.getenv('DATABASE_URL')
+    if env_db_url:
+        print(f"\n尝试使用.env中的DATABASE_URL直接连接:")
+        print(f"连接字符串: {env_db_url}")
+        try:
+            engine = create_engine(env_db_url)
+            with engine.connect():
+                print("✅ 使用.env中的连接字符串连接成功!")
+        except Exception as e:
+            print(f"❌ 使用.env中的连接字符串连接失败: {str(e)}")
+    
     print("-" * 50)
     
     try:

@@ -19,7 +19,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
+*.pyc
 
 # 数据库
 *.db
@@ -66,3 +66,4 @@ tmp/
 *.pyw
 *.pyz
 *.pywz
+
