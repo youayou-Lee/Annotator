@@ -77,13 +77,45 @@ alembic upgrade head
 
 6. 启动服务
 ```bash
-# 启动后端服务
-uvicorn app.main:app --reload
+# 使用脚本启动所有服务(PowerShell)
+.\start-services.ps1
 
-# 启动前端服务
-cd frontend
-npm run dev
+# 或分别启动
+.\run-backend.ps1  # 启动后端
+.\run-frontend.ps1 # 启动前端
+
+# 停止所有服务
+.\stop-services.ps1
 ```
+
+## 使用PowerShell管理服务
+
+本项目提供了PowerShell脚本用于管理服务:
+
+1. **启动所有服务**
+```powershell
+.\start-services.ps1
+```
+
+2. **停止所有服务**
+```powershell
+.\stop-services.ps1
+```
+
+3. **查看服务状态**
+```powershell
+Get-Job | Format-Table -Property Id, Name, State
+```
+
+4. **查看服务日志**
+```powershell
+# 查看指定作业的日志
+Receive-Job -Id <作业ID> -Keep
+# 查看最近日志
+Receive-Job -Id <作业ID> -Keep | Select-Object -Last 20
+```
+
+更多详细说明请参考[PowerShell服务管理文档](docs/powershell-service-management.md)。
 
 ## 项目结构
 

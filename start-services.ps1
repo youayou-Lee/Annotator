@@ -1,12 +1,28 @@
-# 后台启动服务脚本-此脚本适用于AI调用。
-# GBK2312  如果出现乱码就以GBK2312编码重新打开
-
+# 后台服务启动脚本 GBK2312
 Write-Host "正在准备启动服务..." -ForegroundColor Cyan
 
-# 清理现有作业
+# 清理已有作业 - 改进版
 Write-Host "清理现有作业..." -ForegroundColor Yellow
-Get-Job | Where-Object { $_.State -eq "Running" } | Stop-Job
-Get-Job | Remove-Job
+$runningJobs = Get-Job | Where-Object { $_.State -eq "Running" }
+foreach ($job in $runningJobs) {
+    Write-Host "正在停止作业ID: $($job.Id), 名称: $($job.Name)" -ForegroundColor Yellow
+    try {
+        # 使用10秒超时停止作业
+        $job | Stop-Job -Timeout 10 -ErrorAction SilentlyContinue
+        
+        # 如果作业仍在运行，尝试强制停止
+        if ((Get-Job -Id $job.Id).State -eq "Running") {
+            Write-Host "作业 $($job.Id) 未能正常停止，尝试强制停止..." -ForegroundColor Red
+            $job | Stop-Job -PassThru -ErrorAction SilentlyContinue | Remove-Job -Force -ErrorAction SilentlyContinue
+        }
+    }
+    catch {
+        Write-Host "停止作业 $($job.Id) 时出错: $_" -ForegroundColor Red
+    }
+}
+
+# 清理所有作业
+Get-Job | Remove-Job -Force -ErrorAction SilentlyContinue
 
 # 创建日志目录
 $logDir = ".\logs"
@@ -30,7 +46,7 @@ $frontendJob = Start-Job -ScriptBlock {
 } -Name "FrontendService"
 
 # 显示作业信息
-Write-Host "服务已在后台启动:" -ForegroundColor Cyan
+Write-Host "服务已在后台运行:" -ForegroundColor Cyan
 Write-Host "- 后端服务: 作业ID $($backendJob.Id)" -ForegroundColor Green
 Write-Host "- 前端服务: 作业ID $($frontendJob.Id)" -ForegroundColor Green
 
@@ -43,4 +59,26 @@ Write-Host "Receive-Job -Id $($backendJob.Id) -Keep" -ForegroundColor White
 Write-Host "Receive-Job -Id $($frontendJob.Id) -Keep" -ForegroundColor White
 
 Write-Host "`n使用以下命令停止服务:" -ForegroundColor Magenta
-Write-Host "Stop-Job -Id $($backendJob.Id); Stop-Job -Id $($frontendJob.Id)" -ForegroundColor White
+Write-Host "Stop-Job -Id $($backendJob.Id) -Timeout 10; Stop-Job -Id $($frontendJob.Id) -Timeout 10" -ForegroundColor White
+
+# 创建一个专用的停止服务函数
+Write-Host "`n或使用以下函数停止所有服务:" -ForegroundColor Magenta
+Write-Host 'function Stop-AllServices { 
+  param([int]$Timeout = 10)
+  $jobs = Get-Job
+  Write-Host "正在停止 $($jobs.Count) 个服务..." -ForegroundColor Yellow
+  foreach ($job in $jobs) {
+    Write-Host "停止作业: $($job.Id) - $($job.Name)" -ForegroundColor Cyan
+    try {
+      Stop-Job -Id $job.Id -Timeout $Timeout -ErrorAction SilentlyContinue
+      if ((Get-Job -Id $job.Id -ErrorAction SilentlyContinue).State -eq "Running") {
+        Write-Host "强制停止作业: $($job.Id)" -ForegroundColor Red
+        Remove-Job -Id $job.Id -Force -ErrorAction SilentlyContinue
+      }
+    } catch {
+      Write-Host "错误: $_" -ForegroundColor Red
+    }
+  }
+  Write-Host "所有服务已停止" -ForegroundColor Green
+}
+Stop-AllServices' -ForegroundColor White
