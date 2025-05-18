@@ -5,7 +5,7 @@ alwaysApply: false
 ---
 # Git提交
 
-- 提交的时候只需要处理 git add 对应文件和git commit -m "文件修改信息"
+- 提交的时候只需要先观察git status结果，然后 git add 对应文件和git commit -m "文件修改信息"，再push即可
 - 每一次提交记得更新任务开发进度
 - 记录下遇到的bug和解决方案
 
