@@ -6,9 +6,13 @@ from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
 from .config import settings, ensure_data_directories
 from .api import api_router
+from .core.security import create_initial_admin
 
 # 确保数据目录存在
 ensure_data_directories()
+
+# 创建初始管理员账户
+create_initial_admin()
 
 # 创建FastAPI应用 - 禁用默认的docs
 app = FastAPI(

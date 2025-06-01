@@ -14,8 +14,7 @@ class AnnotationStatus(str, Enum):
 
 class AnnotationBase(BaseModel):
     """标注基础模型"""
-    original_data: Dict[str, Any] = {}
-    annotated_data: Dict[str, Any] = {}
+    annotation_data: Dict[str, Any] = {}
 
 
 class AnnotationCreate(AnnotationBase):
@@ -25,7 +24,7 @@ class AnnotationCreate(AnnotationBase):
 
 class AnnotationUpdate(BaseModel):
     """更新标注模型"""
-    annotated_data: Optional[Dict[str, Any]] = None
+    annotation_data: Optional[Dict[str, Any]] = None
     status: Optional[AnnotationStatus] = None
 
 
@@ -33,10 +32,10 @@ class Annotation(AnnotationBase):
     """标注响应模型"""
     document_id: str
     task_id: str
-    status: AnnotationStatus
+    status: AnnotationStatus = AnnotationStatus.PENDING
     annotator_id: Optional[str] = None
     reviewer_id: Optional[str] = None
-    updated_at: datetime
+    updated_at: datetime = None
     reviewed_at: Optional[datetime] = None
     
     class Config:
@@ -45,7 +44,7 @@ class Annotation(AnnotationBase):
 
 class AnnotationSubmit(BaseModel):
     """提交标注模型"""
-    annotated_data: Dict[str, Any]
+    annotation_data: Dict[str, Any]
 
 
 class AnnotationReview(BaseModel):

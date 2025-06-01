@@ -1,0 +1,48 @@
+.App {
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* 确保所有页面都有合适的高度 */
+.page-container {
+  height: 100%;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+/* 页面标题样式 */
+.page-header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #262626;
+  margin: 0;
+}
+
+/* 内容区域样式 */
+.content-wrapper {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .page-container {
+    padding: 16px;
+  }
+  
+  .content-wrapper {
+    padding: 16px;
+  }
+  
+  .page-title {
+    font-size: 20px;
+  }
+} 

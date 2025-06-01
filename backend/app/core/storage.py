@@ -10,6 +10,7 @@ from ..models.user import UserInDB, UserCreate
 from ..models.task import Task, TaskCreate, TaskDocument, TaskTemplate
 from ..models.annotation import Annotation
 from ..models.file import FileInfo, FileType
+from .template_validator import TemplateValidator
 
 
 class StorageManager:
@@ -17,6 +18,7 @@ class StorageManager:
     
     def __init__(self):
         self.data_dir = Path(settings.data_dir)
+        self.template_validator = TemplateValidator()
         self._ensure_directories()
         self._init_default_data()
     
@@ -120,6 +122,18 @@ class StorageManager:
                 self._write_json(users_file, data)
                 return UserInDB(**user_data)
         return None
+    
+    def delete_user(self, user_id: str) -> bool:
+        """删除用户"""
+        users_file = self.data_dir / "users" / "users.json"
+        data = self._read_json(users_file)
+        
+        for i, user_data in enumerate(data.get("users", [])):
+            if user_data["id"] == user_id:
+                del data["users"][i]
+                self._write_json(users_file, data)
+                return True
+        return False
     
     # 任务管理
     def get_all_tasks(self) -> List[Task]:
@@ -231,17 +245,100 @@ class StorageManager:
     
     # 文件管理
     def save_file_info(self, file_info: FileInfo):
-        """保存文件信息"""
-        # 这里可以扩展为保存到文件信息数据库
-        pass
-    
+        """保存文件信息到元数据"""
+        files_file = self.data_dir / "public_files" / "files_metadata.json"
+        data = self._read_json(files_file)
+        
+        if "files" not in data:
+            data["files"] = []
+        
+        # 检查是否已存在，如果存在则更新
+        for i, existing_file in enumerate(data["files"]):
+            if existing_file["id"] == file_info.id:
+                data["files"][i] = file_info.dict()
+                self._write_json(files_file, data)
+                return
+        
+        # 如果不存在则添加
+        data["files"].append(file_info.dict())
+        self._write_json(files_file, data)
+
     def get_file_content(self, file_path: str) -> Optional[str]:
         """获取文件内容"""
-        full_path = self.data_dir / file_path
-        if full_path.exists():
-            try:
-                with open(full_path, 'r', encoding='utf-8') as f:
-                    return f.read()
-            except Exception:
+        try:
+            full_path = self.data_dir / file_path
+            if not full_path.exists():
                 return None
-        return None 
+            
+            with open(full_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception:
+            return None
+    
+    # 文件管理功能
+    def get_all_files(self, file_type: Optional[FileType] = None) -> List[FileInfo]:
+        """获取所有文件信息"""
+        files_file = self.data_dir / "public_files" / "files_metadata.json"
+        data = self._read_json(files_file)
+        
+        files = []
+        for file_data in data.get("files", []):
+            file_info = FileInfo(**file_data)
+            if file_type is None or file_info.file_type == file_type:
+                files.append(file_info)
+        
+        return files
+    
+    def get_file_by_id(self, file_id: str) -> Optional[FileInfo]:
+        """根据ID获取文件信息"""
+        files = self.get_all_files()
+        for file_info in files:
+            if file_info.id == file_id:
+                return file_info
+        return None
+    
+    def delete_file_info(self, file_id: str) -> bool:
+        """删除文件元数据"""
+        files_file = self.data_dir / "public_files" / "files_metadata.json"
+        data = self._read_json(files_file)
+        
+        for i, file_data in enumerate(data.get("files", [])):
+            if file_data["id"] == file_id:
+                del data["files"][i]
+                self._write_json(files_file, data)
+                return True
+        return False
+    
+    def delete_physical_file(self, file_path: str) -> bool:
+        """删除物理文件"""
+        try:
+            full_path = self.data_dir / file_path
+            if full_path.exists():
+                full_path.unlink()
+                return True
+            return False
+        except Exception:
+            return False
+    
+    def validate_python_template(self, file_path: str) -> Dict[str, Any]:
+        """验证Python模板文件 - 使用新的AnnotationSchema格式"""
+        try:
+            full_path = self.data_dir / file_path
+            return self.template_validator.validate_template_file(str(full_path))
+        except Exception as e:
+            return {"valid": False, "error": f"验证失败: {str(e)}"}
+    
+    def get_file_size(self, file_path: str) -> int:
+        """获取文件大小"""
+        try:
+            full_path = self.data_dir / file_path
+            if full_path.exists():
+                return full_path.stat().st_size
+            return 0
+        except Exception:
+            return 0
+    
+    def get_files_by_uploader(self, uploader_id: str) -> List[FileInfo]:
+        """获取指定用户上传的文件"""
+        files = self.get_all_files()
+        return [f for f in files if f.uploader_id == uploader_id] 
