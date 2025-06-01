@@ -16,15 +16,15 @@ storage = StorageManager()
 security = HTTPBearer()
 
 
-@router.post("/login", response_model=Token, summary="用户登录")
+@router.post("/login", response_model=Token, summary="User Login")
 async def login(login_data: LoginRequest):
-    """用户登录接口"""
+    """User login endpoint"""
     # 验证用户
     user = storage.get_user_by_username(login_data.username)
     if not user or not verify_password(login_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误",
+            detail="Invalid username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -38,15 +38,15 @@ async def login(login_data: LoginRequest):
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@router.post("/register", response_model=User, summary="用户注册")
+@router.post("/register", response_model=User, summary="User Registration")
 async def register(register_data: RegisterRequest):
-    """用户注册接口"""
+    """User registration endpoint"""
     # 检查用户名是否已存在
     existing_user = storage.get_user_by_username(register_data.username)
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="用户名已存在"
+            detail="Username already exists"
         )
     
     # 创建新用户
@@ -67,9 +67,9 @@ async def register(register_data: RegisterRequest):
     )
 
 
-@router.get("/me", response_model=User, summary="获取当前用户信息")
+@router.get("/me", response_model=User, summary="Get Current User")
 async def get_current_user_info(current_user: UserInDB = Depends(get_current_user)):
-    """获取当前用户信息"""
+    """Get current user information"""
     return User(
         id=current_user.id,
         username=current_user.username,
