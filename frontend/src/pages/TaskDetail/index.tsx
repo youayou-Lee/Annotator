@@ -358,8 +358,8 @@ const TaskDetail: React.FC = () => {
               <Descriptions.Item label="负责人">
                 <Space>
                   <Avatar size="small" icon={<UserOutlined />} />
-                  <Text>{getUserName(task.assignee_id)}</Text>
-                  <Tag>{getUserRole(task.assignee_id)}</Tag>
+                  <Text>{task.assignee_id ? getUserName(task.assignee_id) : '未分配'}</Text>
+                  {task.assignee_id && <Tag>{getUserRole(task.assignee_id)}</Tag>}
                 </Space>
               </Descriptions.Item>
             </Descriptions>

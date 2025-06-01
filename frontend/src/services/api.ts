@@ -258,20 +258,121 @@ export const fileAPI = {
 
 // 任务管理API
 export const taskAPI = {
-  getTasks: (): Promise<ApiResponse<Task[]>> =>
-    api.get('/tasks').then(res => res.data),
+  getTasks: async (params?: {
+    status?: string
+    assignee_id?: string
+    creator_id?: string
+    search?: string
+    page?: number
+    page_size?: number
+  }): Promise<ApiResponse<Task[]>> => {
+    try {
+      const response = await api.get('/tasks', { params })
+      // 后端返回的是TaskListResponse格式: { tasks: Task[], total: number, page: number, page_size: number, total_pages: number }
+      return {
+        success: true,
+        data: response.data.tasks || []
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '获取任务列表失败'
+      }
+    }
+  },
     
-  createTask: (data: CreateTaskRequest): Promise<ApiResponse<Task>> =>
-    api.post('/tasks', data).then(res => res.data),
+  createTask: async (data: CreateTaskRequest): Promise<ApiResponse<Task>> => {
+    try {
+      const response = await api.post('/tasks', data)
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '创建任务失败'
+      }
+    }
+  },
     
-  getTask: (taskId: string): Promise<ApiResponse<Task>> =>
-    api.get(`/tasks/${taskId}`).then(res => res.data),
+  getTask: async (taskId: string): Promise<ApiResponse<Task>> => {
+    try {
+      const response = await api.get(`/tasks/${taskId}`)
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '获取任务详情失败'
+      }
+    }
+  },
     
-  updateTask: (taskId: string, data: Partial<Task>): Promise<ApiResponse<Task>> =>
-    api.put(`/tasks/${taskId}`, data).then(res => res.data),
+  updateTask: async (taskId: string, data: Partial<CreateTaskRequest>): Promise<ApiResponse<Task>> => {
+    try {
+      const response = await api.put(`/tasks/${taskId}`, data)
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '更新任务失败'
+      }
+    }
+  },
     
-  deleteTask: (taskId: string): Promise<ApiResponse> =>
-    api.delete(`/tasks/${taskId}`).then(res => res.data),
+  deleteTask: async (taskId: string): Promise<ApiResponse> => {
+    try {
+      await api.delete(`/tasks/${taskId}`)
+      return {
+        success: true
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '删除任务失败'
+      }
+    }
+  },
+
+  assignTask: async (taskId: string, assigneeId: string): Promise<ApiResponse<Task>> => {
+    try {
+      const response = await api.put(`/tasks/${taskId}/assign`, { assignee_id: assigneeId })
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '分配任务失败'
+      }
+    }
+  },
+
+  getTaskProgress: async (taskId: string): Promise<ApiResponse<{
+    total_documents: number
+    completed_documents: number
+    progress_percentage: number
+  }>> => {
+    try {
+      const response = await api.get(`/tasks/${taskId}/progress`)
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '获取任务进度失败'
+      }
+    }
+  }
 }
 
 // 标注功能API

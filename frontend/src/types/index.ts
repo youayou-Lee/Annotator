@@ -41,11 +41,16 @@ export interface Task {
   name: string
   description: string
   creator_id: string
-  assignee_id: string
+  assignee_id: string | null
   status: 'pending' | 'in_progress' | 'completed'
   created_at: string
+  updated_at?: string
+  deadline?: string
   documents: TaskDocument[]
   template: TaskTemplate
+  creator?: User
+  assignee?: User
+  progress?: TaskProgress
 }
 
 export interface TaskDocument {
@@ -53,19 +58,51 @@ export interface TaskDocument {
   filename: string
   file_path: string
   status: 'pending' | 'completed'
+  annotation_count?: number
 }
 
 export interface TaskTemplate {
+  id: string
   filename: string
   file_path: string
+  fields?: FormField[]
+}
+
+export interface TaskProgress {
+  total_documents: number
+  completed_documents: number
+  progress_percentage: number
 }
 
 export interface CreateTaskRequest {
   name: string
   description: string
-  assignee_id: string
-  document_ids: string[]
-  template_id: string
+  assignee_id?: string
+  documents: string[]
+  template_path?: string
+  deadline?: string
+}
+
+export interface TaskFilters {
+  status?: string
+  assignee_id?: string
+  creator_id?: string
+  search?: string
+}
+
+export interface TaskStats {
+  total: number
+  pending: number
+  in_progress: number
+  completed: number
+}
+
+export interface TaskListResponse {
+  tasks: Task[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
 }
 
 // 标注相关类型

@@ -338,7 +338,14 @@ class StorageManager:
         # 计算进度
         new_task.progress = self._calculate_task_progress(new_task)
         
-        data["tasks"].append(new_task.dict())
+        # 使用model_dump()替代dict()以兼容Pydantic v2
+        try:
+            task_dict = new_task.model_dump()
+        except AttributeError:
+            # 兼容Pydantic v1
+            task_dict = new_task.dict()
+        
+        data["tasks"].append(task_dict)
         self._write_json(tasks_file, data)
         
         # 创建任务目录
@@ -369,7 +376,14 @@ class StorageManager:
                     updated_task.status = auto_status
                     task_data["status"] = auto_status.value
                 
-                data["tasks"][i] = updated_task.dict()
+                # 使用model_dump()替代dict()以兼容Pydantic v2
+                try:
+                    task_dict = updated_task.model_dump()
+                except AttributeError:
+                    # 兼容Pydantic v1
+                    task_dict = updated_task.dict()
+                
+                data["tasks"][i] = task_dict
                 self._write_json(tasks_file, data)
                 return updated_task
         return None

@@ -113,7 +113,19 @@ async def create_task(
                 detail="指定的分配人不存在"
             )
     
-    return storage.create_task(task_create, current_user.id)
+    try:
+        return storage.create_task(task_create, current_user.id)
+    except Exception as e:
+        # 添加详细的错误日志
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"任务创建失败: {str(e)}")
+        print(f"错误详情: {error_details}")
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 
 @router.get("/{task_id}", response_model=Task, summary="获取任务详情")
