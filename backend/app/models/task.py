@@ -1,48 +1,67 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Enum, JSON
-from sqlalchemy.orm import relationship
-from app.db.base_class import Base
-from app.models.user import User
-import enum
 from datetime import datetime
+from typing import Optional, List
+from pydantic import BaseModel
+from enum import Enum
 
-class TaskStatus(str, enum.Enum):
+
+class TaskStatus(str, Enum):
+    """任务状态枚举"""
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
-    REVIEWED = "reviewed"
-    REJECTED = "rejected"
 
-class FieldType(str, enum.Enum):
-    STRING = "string"
-    INTEGER = "integer"
-    FLOAT = "float"
-    BOOLEAN = "boolean"
-    DATE = "date"
-    DATETIME = "datetime"
-    EMAIL = "email"
-    PHONE = "phone"
-    ENUM = "enum"
-    OBJECT = "object"
-    ARRAY = "array"
 
-class Task(Base):
-    __tablename__ = "tasks"
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(100), nullable=False)
-    description = Column(Text)
-    status = Column(Enum(TaskStatus), default=TaskStatus.PENDING)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
-    annotator_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+class DocumentStatus(str, Enum):
+    """文档状态枚举"""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+
+class TaskDocument(BaseModel):
+    """任务文档模型"""
+    id: str
+    filename: str
+    file_path: str
+    status: DocumentStatus = DocumentStatus.PENDING
+
+
+class TaskTemplate(BaseModel):
+    """任务模板模型"""
+    filename: str
+    file_path: str
+
+
+class TaskBase(BaseModel):
+    """任务基础模型"""
+    name: str
+    description: Optional[str] = None
+
+
+class TaskCreate(TaskBase):
+    """创建任务模型"""
+    assignee_id: Optional[str] = None
+    documents: List[str] = []  # 文档文件路径列表
+    template_path: Optional[str] = None
+
+
+class TaskUpdate(BaseModel):
+    """更新任务模型"""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    assignee_id: Optional[str] = None
+    status: Optional[TaskStatus] = None
+
+
+class Task(TaskBase):
+    """任务响应模型"""
+    id: str
+    creator_id: str
+    assignee_id: Optional[str] = None
+    status: TaskStatus
+    created_at: datetime
+    documents: List[TaskDocument] = []
+    template: Optional[TaskTemplate] = None
     
-    # 新增字段
-    annotation_fields = Column(JSON, nullable=True)  # 存储需要标注的字段定义，包括字段名称、类型和其他属性
-    validation_template = Column(String(255), nullable=True)  # Python模板文件路径，用于校验
-    validation_schema = Column(JSON, nullable=True)  # Pydantic BaseModel的JSON表示，用于格式校验
-    
-    user = relationship("User", back_populates="tasks", foreign_keys=[annotator_id])
-    document = relationship("Document", back_populates="tasks")
-    annotations = relationship("Annotation", back_populates="task", cascade="all, delete-orphan") 
+    class Config:
+        from_attributes = True 

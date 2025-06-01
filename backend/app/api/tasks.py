@@ -1,90 +1,131 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from app.api.deps import get_db, get_current_user
-from app.models.user import User
-from app.models.task import TaskStatus
-from app.schemas.task import Task, TaskCreate, TaskUpdate
-from app.services import task as task_service
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, status
+
+from ..models.user import UserInDB, UserRole
+from ..models.task import Task, TaskCreate, TaskUpdate
+from ..core.security import get_current_user
+from ..core.storage import StorageManager
 
 router = APIRouter()
+storage = StorageManager()
 
-@router.post("/", response_model=Task)
-def create_task(
-    *,
-    db: Session = Depends(get_db),
-    task_in: TaskCreate,
-    current_user: User = Depends(get_current_user)
-) -> Task:
-    """
-    创建新任务
-    """
-    return task_service.create_task(db=db, task_in=task_in)
 
-@router.get("/", response_model=List[Task])
-def get_tasks(
-    db: Session = Depends(get_db),
-    skip: int = 0,
-    limit: int = 100,
-    annotator_id: Optional[int] = None,
-    reviewer_id: Optional[int] = None,
-    status: Optional[TaskStatus] = None,
-    current_user: User = Depends(get_current_user)
-) -> List[Task]:
-    """
-    获取任务列表
-    """
-    return task_service.get_tasks(
-        db=db,
-        skip=skip,
-        limit=limit,
-        annotator_id=annotator_id,
-        reviewer_id=reviewer_id,
-        status=status
-    )
+@router.get("/", response_model=List[Task], summary="获取任务列表")
+async def get_tasks(current_user: UserInDB = Depends(get_current_user)):
+    """获取任务列表"""
+    tasks = storage.get_all_tasks()
+    
+    # 根据用户角色过滤任务
+    if current_user.role == UserRole.ANNOTATOR:
+        # 标注员只能看到分配给自己的任务
+        tasks = [task for task in tasks if task.assignee_id == current_user.id]
+    
+    return tasks
 
-@router.get("/{task_id}", response_model=Task)
-def get_task(
-    *,
-    db: Session = Depends(get_db),
-    task_id: int,
-    current_user: User = Depends(get_current_user)
-) -> Task:
-    """
-    获取单个任务
-    """
-    db_task = task_service.get_task(db=db, task_id=task_id)
-    if not db_task:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    return db_task
 
-@router.put("/{task_id}", response_model=Task)
-def update_task(
-    *,
-    db: Session = Depends(get_db),
-    task_id: int,
-    task_in: TaskUpdate,
-    current_user: User = Depends(get_current_user)
-) -> Task:
-    """
-    更新任务
-    """
-    db_task = task_service.update_task(db=db, task_id=task_id, task_in=task_in)
-    if not db_task:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    return db_task
+@router.post("/", response_model=Task, summary="创建任务")
+async def create_task(
+    task_create: TaskCreate,
+    current_user: UserInDB = Depends(get_current_user)
+):
+    """创建任务"""
+    # 检查权限
+    if current_user.role == UserRole.ANNOTATOR:
+        # 标注员只能创建分配给自己的任务
+        if task_create.assignee_id and task_create.assignee_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="标注员只能创建分配给自己的任务"
+            )
+        task_create.assignee_id = current_user.id
+    
+    return storage.create_task(task_create, current_user.id)
 
-@router.delete("/{task_id}", response_model=Task)
-def delete_task(
-    *,
-    db: Session = Depends(get_db),
-    task_id: int,
-    current_user: User = Depends(get_current_user)
-) -> Task:
-    """
-    删除任务
-    """
-    db_task = task_service.delete_task(db=db, task_id=task_id)
-    if not db_task:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    return db_task 
+
+@router.get("/{task_id}", response_model=Task, summary="获取任务详情")
+async def get_task(task_id: str, current_user: UserInDB = Depends(get_current_user)):
+    """获取任务详情"""
+    task = storage.get_task_by_id(task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="任务不存在"
+        )
+    
+    # 检查权限
+    if current_user.role == UserRole.ANNOTATOR:
+        if task.assignee_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权访问此任务"
+            )
+    
+    return task
+
+
+@router.put("/{task_id}", response_model=Task, summary="更新任务")
+async def update_task(
+    task_id: str,
+    task_update: TaskUpdate,
+    current_user: UserInDB = Depends(get_current_user)
+):
+    """更新任务"""
+    task = storage.get_task_by_id(task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="任务不存在"
+        )
+    
+    # 检查权限
+    if current_user.role == UserRole.ANNOTATOR:
+        if task.assignee_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权修改此任务"
+            )
+    
+    update_data = task_update.dict(exclude_unset=True)
+    updated_task = storage.update_task(task_id, update_data)
+    
+    if not updated_task:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="更新任务失败"
+        )
+    
+    return updated_task
+
+
+@router.delete("/{task_id}", summary="删除任务")
+async def delete_task(task_id: str, current_user: UserInDB = Depends(get_current_user)):
+    """删除任务"""
+    task = storage.get_task_by_id(task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="任务不存在"
+        )
+    
+    # 检查权限
+    if current_user.role not in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        if task.creator_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只能删除自己创建的任务"
+            )
+    
+    success = storage.delete_task(task_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="删除任务失败"
+        )
+    
+    return {"message": "任务删除成功"}
+
+
+@router.post("/{task_id}/export", summary="导出任务数据")
+async def export_task(task_id: str, current_user: UserInDB = Depends(get_current_user)):
+    """导出任务数据"""
+    return {"message": "导出功能待实现"} 
