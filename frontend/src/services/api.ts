@@ -377,14 +377,169 @@ export const taskAPI = {
 
 // 标注功能API
 export const annotationAPI = {
-  getAnnotation: (taskId: string, documentId: string): Promise<ApiResponse<AnnotationData>> =>
-    api.get(`/tasks/${taskId}/documents/${documentId}/annotation`).then(res => res.data),
+  // 获取任务文档列表
+  getDocuments: async (taskId: string, statusFilter?: string): Promise<ApiResponse<any>> => {
+    try {
+      const response = await api.get(`/annotations/${taskId}/documents`, {
+        params: statusFilter ? { status_filter: statusFilter } : {}
+      })
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '获取文档列表失败'
+      }
+    }
+  },
+
+  // 获取文档内容
+  getDocumentContent: async (taskId: string, documentId: string): Promise<ApiResponse<any>> => {
+    try {
+      const response = await api.get(`/annotations/${taskId}/documents/${documentId}/content`)
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '获取文档内容失败'
+      }
+    }
+  },
+
+  // 获取表单配置
+  getFormConfig: async (taskId: string, documentId: string): Promise<ApiResponse<any>> => {
+    try {
+      const response = await api.get(`/annotations/${taskId}/documents/${documentId}/form-config`)
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '获取表单配置失败'
+      }
+    }
+  },
+
+  // 获取标注数据
+  getAnnotation: async (taskId: string, documentId: string): Promise<ApiResponse<AnnotationData>> => {
+    try {
+      const response = await api.get(`/annotations/${taskId}/documents/${documentId}/annotation`)
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '获取标注数据失败'
+      }
+    }
+  },
     
-  saveAnnotation: (taskId: string, documentId: string, data: AnnotationRequest): Promise<ApiResponse<AnnotationData>> =>
-    api.post(`/tasks/${taskId}/documents/${documentId}/annotation`, data).then(res => res.data),
+  // 保存标注数据
+  saveAnnotation: async (taskId: string, documentId: string, data: any): Promise<ApiResponse<AnnotationData>> => {
+    try {
+      const response = await api.post(`/annotations/${taskId}/documents/${documentId}/annotation`, data)
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '保存标注数据失败'
+      }
+    }
+  },
     
-  submitAnnotation: (taskId: string, documentId: string): Promise<ApiResponse> =>
-    api.post(`/tasks/${taskId}/documents/${documentId}/submit`).then(res => res.data),
+  // 提交标注
+  submitAnnotation: async (taskId: string, documentId: string, data?: any): Promise<ApiResponse<any>> => {
+    try {
+      const response = await api.post(`/annotations/${taskId}/documents/${documentId}/submit`, data || {})
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '提交标注失败'
+      }
+    }
+  },
+
+  // 获取任务进度
+  getTaskProgress: async (taskId: string, currentDocumentId?: string): Promise<ApiResponse<any>> => {
+    try {
+      const response = await api.get(`/annotations/${taskId}/progress`, {
+        params: currentDocumentId ? { current_document_id: currentDocumentId } : {}
+      })
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '获取任务进度失败'
+      }
+    }
+  },
+
+  // 验证标注数据
+  validateAnnotation: async (data: any): Promise<ApiResponse<any>> => {
+    try {
+      const response = await api.post('/annotations/validate', data)
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '验证标注数据失败'
+      }
+    }
+  },
+
+  // 验证部分标注数据（实时验证）
+  validatePartial: async (data: any): Promise<ApiResponse<any>> => {
+    try {
+      const response = await api.post('/annotations/validate-partial', data)
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '验证部分数据失败'
+      }
+    }
+  },
+
+  // 删除标注数据
+  deleteAnnotation: async (taskId: string, documentId: string): Promise<ApiResponse<any>> => {
+    try {
+      const response = await api.delete(`/annotations/${taskId}/${documentId}`)
+      return {
+        success: true,
+        data: response.data
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.response?.data?.detail || '删除标注数据失败'
+      }
+    }
+  }
 }
 
 // 复审功能API

@@ -30,8 +30,16 @@ export default defineConfig({
           vendor: ['react', 'react-dom'],
           antd: ['antd'],
           router: ['react-router-dom'],
+          monaco: ['@monaco-editor/react', 'monaco-editor'],
         },
       },
     },
+  },
+  define: {
+    // 配置Monaco Editor使用本地资源
+    'process.env.MONACO_EDITOR_CDN': JSON.stringify(false),
+  },
+  optimizeDeps: {
+    include: ['@monaco-editor/react', 'monaco-editor'],
   },
 }) 
