@@ -7,12 +7,12 @@ from typing import List, Optional, Dict, Any, Tuple
 from pathlib import Path
 
 from ..config import settings
-from ..models.user import UserInDB, UserCreate
+from ..models.user import UserInDB, UserCreate, UserRole
 from ..models.task import (
     Task, TaskCreate, TaskDocument, TaskTemplate, TaskProgress, 
     TaskQuery, TaskListResponse, TaskStatistics, TaskStatus, DocumentStatus
 )
-from ..models.annotation import Annotation
+from ..models.annotation import Annotation, AnnotationStatus
 from ..models.file import FileInfo, FileType
 from .template_validator import TemplateValidator
 
@@ -55,6 +55,11 @@ class StorageManager:
         if not tasks_file.exists():
             default_tasks = {"tasks": []}
             self._write_json(tasks_file, default_tasks)
+        
+        # 初始化文件元数据文件
+        files_file = self.data_dir / "public_files" / "files_metadata.json"
+        if not files_file.exists():
+            self._write_json(files_file, {"files": []})
     
     def _read_json(self, file_path: Path) -> Dict[str, Any]:
         """读取JSON文件"""
@@ -112,24 +117,24 @@ class StorageManager:
             return TaskStatus.PENDING
     
     def _parse_template_file(self, template_path: str) -> Dict[str, Any]:
-        """解析模板文件，提取字段信息"""
+        """解析模板文件"""
         try:
+            full_path = self.data_dir / template_path
             validation_result = self.validate_python_template(template_path)
-            if validation_result.get("valid"):
+            
+            if validation_result["valid"]:
                 return {
-                    "fields": validation_result.get("schema", {}),
-                    "validation_result": validation_result
+                    "valid": True,
+                    "template_info": validation_result.get("template_info", {}),
+                    "annotation_fields": validation_result.get("annotation_fields", [])
                 }
             else:
                 return {
-                    "fields": {},
-                    "validation_result": validation_result
+                    "valid": False,
+                    "error": validation_result.get("error", "模板解析失败")
                 }
         except Exception as e:
-            return {
-                "fields": {},
-                "validation_result": {"valid": False, "error": str(e)}
-            }
+            return {"valid": False, "error": f"模板解析失败: {str(e)}"}
 
     # 用户管理
     def get_all_users(self) -> List[UserInDB]:
@@ -446,14 +451,25 @@ class StorageManager:
     
     def save_annotation(self, annotation: Annotation) -> Annotation:
         """保存标注数据"""
-        annotation_file = self.data_dir / "tasks" / annotation.task_id / "annotations" / f"{annotation.document_id}.json"
+        annotation_dir = self.data_dir / "tasks" / annotation.task_id / "annotations"
+        annotation_dir.mkdir(parents=True, exist_ok=True)
+        
+        annotation_file = annotation_dir / f"{annotation.document_id}.json"
         annotation.updated_at = datetime.now()
-        self._write_json(annotation_file, annotation.dict())
+        
+        # 使用model_dump()替代dict()以兼容Pydantic v2
+        try:
+            annotation_dict = annotation.model_dump()
+        except AttributeError:
+            # 兼容Pydantic v1
+            annotation_dict = annotation.dict()
+        
+        self._write_json(annotation_file, annotation_dict)
         
         # 更新文档状态
-        if annotation.status == "completed":
+        if annotation.status == AnnotationStatus.COMPLETED:
             self.update_document_status(annotation.task_id, annotation.document_id, DocumentStatus.COMPLETED)
-        elif annotation.status == "in_progress":
+        elif annotation.status == AnnotationStatus.IN_PROGRESS:
             self.update_document_status(annotation.task_id, annotation.document_id, DocumentStatus.IN_PROGRESS)
         
         return annotation
@@ -536,12 +552,24 @@ class StorageManager:
             return False
     
     def validate_python_template(self, file_path: str) -> Dict[str, Any]:
-        """验证Python模板文件 - 使用新的AnnotationSchema格式"""
+        """验证Python模板文件"""
         try:
             full_path = self.data_dir / file_path
-            return self.template_validator.validate_template_file(str(full_path))
+            validation_result = self.template_validator.validate_template_file(str(full_path))
+            
+            if validation_result["valid"]:
+                return {
+                    "valid": True,
+                    "template_info": validation_result.get("template_info", {}),
+                    "annotation_fields": validation_result.get("annotation_fields", [])
+                }
+            else:
+                return {
+                    "valid": False,
+                    "error": validation_result.get("error", "模板解析失败")
+                }
         except Exception as e:
-            return {"valid": False, "error": f"验证失败: {str(e)}"}
+            return {"valid": False, "error": f"模板解析失败: {str(e)}"}
     
     def get_file_size(self, file_path: str) -> int:
         """获取文件大小"""
