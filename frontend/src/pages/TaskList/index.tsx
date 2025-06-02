@@ -16,7 +16,9 @@ import {
   message,
   Spin,
   Empty,
-  Tooltip
+  Tooltip,
+  Layout,
+  App
 } from 'antd'
 import {
   PlusOutlined,
@@ -35,7 +37,7 @@ import {
   ExclamationCircleOutlined
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskAPI, userAPI } from '../../services/api'
 import { useAuthStore } from '../../stores/authStore'
 import type { Task, TaskFilters } from '../../types'
@@ -45,10 +47,13 @@ import TaskEditModal from './components/TaskEditModal'
 const { Title, Text } = Typography
 const { Search } = Input
 const { Option } = Select
+const { Content } = Layout
 
 const TaskList: React.FC = () => {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { user, hasPermission } = useAuthStore()
+  const { message } = App.useApp()
   
   // 状态管理
   const [filters, setFilters] = useState<TaskFilters>({})

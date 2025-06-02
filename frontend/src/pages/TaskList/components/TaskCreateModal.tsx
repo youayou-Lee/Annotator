@@ -5,7 +5,7 @@ import {
   Input,
   Select,
   DatePicker,
-  message,
+  App,
   Spin,
   Card,
   List,
@@ -40,6 +40,7 @@ const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
   const { user, hasPermission } = useAuthStore()
   const [selectedDocuments, setSelectedDocuments] = useState<string[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  const { message } = App.useApp()
 
   // 获取文档文件
   const { data: documentsResponse, isLoading: documentsLoading } = useQuery({

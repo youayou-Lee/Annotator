@@ -20,6 +20,10 @@ export default defineConfig({
         secure: false,
       },
     },
+    fs: {
+      // 允许访问 node_modules 中的 monaco-editor 文件
+      allow: ['..']
+    }
   },
   build: {
     outDir: 'dist',
@@ -34,12 +38,23 @@ export default defineConfig({
         },
       },
     },
+    // 复制 monaco-editor 静态资源
+    copyPublicDir: true,
   },
   define: {
     // 配置Monaco Editor使用本地资源
     'process.env.MONACO_EDITOR_CDN': JSON.stringify(false),
+    // 确保 Monaco Editor 使用正确的路径
+    global: 'globalThis',
   },
   optimizeDeps: {
     include: ['@monaco-editor/react', 'monaco-editor'],
+    exclude: ['monaco-editor/esm/vs/editor/editor.worker']
   },
+  worker: {
+    format: 'es'
+  },
+  assetsInclude: ['**/*.wasm'],
+  // 静态资源处理
+  publicDir: 'public'
 }) 

@@ -5,11 +5,15 @@ import { ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
-import App from './App'
+import App from './App.tsx'
 import './index.css'
+import configureMonaco from './utils/monaco'
 
 // 设置dayjs中文
 dayjs.locale('zh-cn')
+
+// 配置 Monaco Editor
+configureMonaco()
 
 // 创建QueryClient实例
 const queryClient = new QueryClient({

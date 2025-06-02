@@ -1,32 +1,50 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Card,
-  Table,
+  Layout,
+  Typography,
   Button,
+  Table,
   Space,
   Tag,
-  message,
   Modal,
   Form,
   Input,
   Select,
+  App,
+  Tooltip,
   Popconfirm,
+  Card,
+  Row,
+  Col,
+  Statistic
 } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
-import { useAuthStore } from '../../stores/authStore'
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  UserOutlined,
+  TeamOutlined,
+  CrownOutlined,
+  SafetyOutlined
+} from '@ant-design/icons'
 import { userAPI } from '../../services/api'
+import { useAuthStore } from '../../stores/authStore'
 import type { User } from '../../types'
 import type { ColumnsType } from 'antd/es/table'
 
+const { Title } = Typography
+const { Content } = Layout
 const { Option } = Select
 
 const UserManagement: React.FC = () => {
+  const { user: currentUser, hasPermission } = useAuthStore()
+  const { message } = App.useApp()
+  
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [form] = Form.useForm()
-  const { hasPermission } = useAuthStore()
 
   // 检查权限
   if (!hasPermission('user.manage')) {
@@ -38,14 +56,17 @@ const UserManagement: React.FC = () => {
   }
 
   // 获取用户列表
-  const fetchUsers = async () => {
+  const loadUsers = async () => {
     setLoading(true)
     try {
       const response = await userAPI.getUsers()
       if (response.success && response.data) {
         setUsers(response.data)
+      } else {
+        message.error('获取用户列表失败')
       }
     } catch (error) {
+      console.error('获取用户列表失败:', error)
       message.error('获取用户列表失败')
     } finally {
       setLoading(false)
@@ -53,7 +74,7 @@ const UserManagement: React.FC = () => {
   }
 
   useEffect(() => {
-    fetchUsers()
+    loadUsers()
   }, [])
 
   // 获取角色标签
@@ -135,7 +156,7 @@ const UserManagement: React.FC = () => {
     try {
       // TODO: 实现删除用户API
       message.success('删除成功')
-      fetchUsers()
+      loadUsers()
     } catch (error) {
       message.error('删除失败')
     }
@@ -155,7 +176,7 @@ const UserManagement: React.FC = () => {
       setModalVisible(false)
       setEditingUser(null)
       form.resetFields()
-      fetchUsers()
+      loadUsers()
     } catch (error) {
       message.error('操作失败')
     }

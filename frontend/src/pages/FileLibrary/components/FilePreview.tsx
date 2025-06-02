@@ -2,39 +2,61 @@ import React, { useState, useEffect } from 'react'
 import {
   Modal,
   Spin,
-  message,
   Typography,
   Space,
-  Tag,
   Button,
-  Alert
+  Tag,
+  Descriptions,
+  Alert,
+  App
 } from 'antd'
 import {
   DownloadOutlined,
   FileTextOutlined,
   CodeOutlined,
-  ExportOutlined
+  EyeOutlined,
+  CloseOutlined
 } from '@ant-design/icons'
-import Editor from '@monaco-editor/react'
+import MonacoEditor from '@monaco-editor/react'
 import { fileAPI } from '../../../services/api'
 import type { FileItem } from '../../../types'
 
-const { Text } = Typography
+const { Title, Text, Paragraph } = Typography
+
+// 设置 Monaco Editor 环境变量，避免 CDN 加载
+if (typeof window !== 'undefined') {
+  (window as any).MonacoEnvironment = {
+    getWorker: () => {
+      // 返回一个简单的 worker，避免网络请求
+      return new Worker(
+        URL.createObjectURL(
+          new Blob([`
+            self.onmessage = function() {
+              // 简单的 worker，不做任何操作
+              self.postMessage({});
+            };
+          `], { type: 'application/javascript' })
+        )
+      )
+    }
+  }
+}
 
 interface FilePreviewProps {
-  file: FileItem | null
   visible: boolean
-  onClose: () => void
+  file: FileItem | null
+  onCancel: () => void
 }
 
 const FilePreview: React.FC<FilePreviewProps> = ({
-  file,
   visible,
-  onClose
+  file,
+  onCancel
 }) => {
-  const [loading, setLoading] = useState(false)
   const [content, setContent] = useState<string>('')
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>('')
+  const { message } = App.useApp()
 
   // 获取文件语言类型
   const getLanguage = (filename: string): string => {
@@ -73,7 +95,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({
       case 'templates':
         return <CodeOutlined style={{ color: '#52c41a' }} />
       case 'exports':
-        return <ExportOutlined style={{ color: '#fa8c16' }} />
+        return <CodeOutlined style={{ color: '#fa8c16' }} />
       default:
         return <FileTextOutlined />
     }
@@ -189,14 +211,14 @@ const FilePreview: React.FC<FilePreviewProps> = ({
         </Space>
       }
       open={visible}
-      onCancel={onClose}
+      onCancel={onCancel}
       width="80%"
       style={{ top: 20 }}
       footer={[
         <Button key="download" icon={<DownloadOutlined />} onClick={handleDownload}>
           下载文件
         </Button>,
-        <Button key="close" onClick={onClose}>
+        <Button key="close" onClick={onCancel}>
           关闭
         </Button>
       ]}
@@ -237,7 +259,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({
         />
       ) : (
         <div style={{ border: '1px solid #d9d9d9', borderRadius: 6 }}>
-          <Editor
+          <MonacoEditor
             height="500px"
             language={getLanguage(file.filename)}
             value={content}
@@ -249,7 +271,19 @@ const FilePreview: React.FC<FilePreviewProps> = ({
               lineNumbers: 'on',
               wordWrap: 'on',
               automaticLayout: true,
-              theme: 'vs-light'
+              theme: 'vs-light',
+              // 禁用所有可能触发网络请求的功能
+              quickSuggestions: false,
+              suggestOnTriggerCharacters: false,
+              acceptSuggestionOnEnter: 'off',
+              tabCompletion: 'off',
+              wordBasedSuggestions: 'off',
+              parameterHints: { enabled: false },
+              hover: { enabled: false },
+              links: false,
+              colorDecorators: false,
+              codeLens: false,
+              contextmenu: false
             }}
           />
         </div>

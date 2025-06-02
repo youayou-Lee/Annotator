@@ -10,12 +10,15 @@ import {
   Space,
   Divider,
   Checkbox,
+  Tabs,
+  App,
 } from 'antd'
-import { UserOutlined, LockOutlined } from '@ant-design/icons'
+import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons'
 import { useAuthStore } from '../../stores/authStore'
 import { authAPI } from '../../services/api'
 import type { LoginRequest } from '../../types'
 import './index.css'
+import Register from './Register'
 
 const { Title, Text } = Typography
 
@@ -24,6 +27,7 @@ const Login: React.FC = () => {
   const [form] = Form.useForm()
   const navigate = useNavigate()
   const { login } = useAuthStore()
+  const { message } = App.useApp()
 
   const handleLogin = async (values: LoginRequest & { remember?: boolean }) => {
     setLoading(true)

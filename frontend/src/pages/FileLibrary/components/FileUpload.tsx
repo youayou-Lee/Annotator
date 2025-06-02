@@ -6,13 +6,19 @@ import {
   Progress,
   Card,
   Typography,
-  Space
+  Space,
+  Alert,
+  List,
+  Tag,
+  App
 } from 'antd'
 import { 
   UploadOutlined, 
   InboxOutlined,
   FileTextOutlined,
-  CodeOutlined
+  CodeOutlined,
+  DeleteOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons'
 import type { UploadProps } from 'antd'
 import { fileAPI } from '../../../services/api'
@@ -22,40 +28,58 @@ const { Dragger } = Upload
 const { Text } = Typography
 
 interface FileUploadProps {
-  type: 'documents' | 'templates'
-  accept?: string
-  onSuccess?: (file: FileItem) => void
-  style?: React.CSSProperties
+  visible: boolean
+  type: 'documents' | 'templates' | 'exports'
+  onCancel: () => void
+  onSuccess: (file: FileItem) => void
+}
+
+interface UploadFile {
+  uid: string
+  name: string
+  size: number
+  status: 'uploading' | 'done' | 'error'
+  progress: number
+  response?: any
+  error?: string
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({
+  visible,
   type,
-  accept,
-  onSuccess,
-  style
+  onCancel,
+  onSuccess
 }) => {
+  const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([])
   const [uploading, setUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
+  const { message } = App.useApp()
 
   // 获取文件类型配置
   const getFileTypeConfig = () => {
-    if (type === 'documents') {
-      return {
+    const configs = {
+      documents: {
         title: '上传文档文件',
-        description: '支持 JSON、JSONL 格式文件',
+        description: '支持 JSON、JSONL、TXT、CSV 格式，单个文件不超过 50MB',
         icon: <FileTextOutlined style={{ fontSize: 48, color: '#1890ff' }} />,
-        acceptTypes: '.json,.jsonl',
+        acceptTypes: '.json,.jsonl,.txt,.csv',
         maxSize: 50 // MB
-      }
-    } else {
-      return {
+      },
+      templates: {
         title: '上传模板文件',
-        description: '支持 Python 格式文件',
+        description: '支持 Python、JSON 格式，单个文件不超过 10MB',
         icon: <CodeOutlined style={{ fontSize: 48, color: '#52c41a' }} />,
-        acceptTypes: '.py',
+        acceptTypes: '.py,.json',
         maxSize: 10 // MB
+      },
+      exports: {
+        title: '上传导出文件',
+        description: '支持 JSON、CSV、Excel、ZIP 格式，单个文件不超过 100MB',
+        icon: <CheckCircleOutlined style={{ fontSize: 48, color: '#52c41a' }} />,
+        acceptTypes: '.json,.csv,.xlsx,.zip',
+        maxSize: 100 // MB
       }
     }
+    return configs[type as keyof typeof configs] || configs.documents
   }
 
   const config = getFileTypeConfig()
@@ -71,7 +95,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
 
     // 检查文件类型
     const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
-    const acceptedTypes = (accept || config.acceptTypes).split(',').map(t => t.trim())
+    const acceptedTypes = (config.acceptTypes).split(',').map(t => t.trim())
     
     if (!acceptedTypes.includes(fileExtension)) {
       message.error(`只支持 ${acceptedTypes.join(', ')} 格式的文件`)
@@ -86,24 +110,26 @@ const FileUpload: React.FC<FileUploadProps> = ({
     const { file, onSuccess: uploadOnSuccess, onError } = options
     
     setUploading(true)
-    setUploadProgress(0)
+    setUploadFiles([{ uid: '', name: file.name, size: file.size, status: 'uploading', progress: 0 }])
 
     try {
       // 模拟上传进度
       const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval)
-            return 90
-          }
-          return prev + 10
-        })
+        setUploadFiles(prev => prev.map(f => ({
+          ...f,
+          progress: prev.find(ff => ff.name === f.name)?.progress ? 90 : 0
+        })))
       }, 100)
 
-      const response = await fileAPI.uploadFile(file, type)
+      const response = await fileAPI.uploadFile(file, type as 'documents' | 'templates')
       
       clearInterval(progressInterval)
-      setUploadProgress(100)
+      setUploadFiles(prev => prev.map(f => ({
+        ...f,
+        status: response.success ? 'done' : 'error',
+        response: response.data,
+        error: response.message
+      })))
 
       if (response.success && response.data) {
         message.success(`文件 ${file.name} 上传成功`)
@@ -113,7 +139,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         // 重置状态
         setTimeout(() => {
           setUploading(false)
-          setUploadProgress(0)
+          setUploadFiles([])
         }, 1000)
       } else {
         throw new Error(response.message || '上传失败')
@@ -123,14 +149,14 @@ const FileUpload: React.FC<FileUploadProps> = ({
       message.error(error.message || '文件上传失败')
       onError?.(error)
       setUploading(false)
-      setUploadProgress(0)
+      setUploadFiles([])
     }
   }
 
   const uploadProps: UploadProps = {
     name: 'file',
     multiple: false,
-    accept: accept || config.acceptTypes,
+    accept: config.acceptTypes,
     beforeUpload,
     customRequest,
     showUploadList: false,
@@ -138,7 +164,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
   }
 
   return (
-    <Card style={style}>
+    <Card style={{ display: visible ? 'block' : 'none' }}>
       <div style={{ textAlign: 'center', padding: '20px 0' }}>
         {config.icon}
         <div style={{ marginTop: 16, marginBottom: 16 }}>
@@ -154,8 +180,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
         {uploading ? (
           <div style={{ margin: '20px 0' }}>
             <Progress 
-              percent={uploadProgress} 
-              status={uploadProgress === 100 ? 'success' : 'active'}
+              percent={uploadFiles.find(f => f.name === uploadProps.name)?.progress || 0} 
+              status={uploadFiles.find(f => f.name === uploadProps.name)?.status === 'done' ? 'success' : 'active'}
               strokeColor={{
                 '0%': '#108ee9',
                 '100%': '#87d068',

@@ -12,7 +12,7 @@ import {
   Switch,
   DatePicker,
   InputNumber,
-  message,
+  App,
   Spin,
   Alert,
   Breadcrumb,
@@ -50,7 +50,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskAPI, annotationAPI } from '../../services/api'
 import MonacoEditor from '@monaco-editor/react'
-import { loader } from '@monaco-editor/react'
 import dayjs from 'dayjs'
 import FormFieldRenderer, { FormField as FormFieldType } from './components/FormFieldRenderer'
 
@@ -61,12 +60,24 @@ const { Option } = Select
 const { Group: CheckboxGroup } = Checkbox
 const { Group: RadioGroup } = Radio
 
-// 配置Monaco Editor使用本地资源
-loader.config({
-  paths: {
-    vs: '/node_modules/monaco-editor/min/vs'
+// 设置 Monaco Editor 环境变量，避免 CDN 加载
+if (typeof window !== 'undefined') {
+  (window as any).MonacoEnvironment = {
+    getWorker: () => {
+      // 返回一个简单的 worker，避免网络请求
+      return new Worker(
+        URL.createObjectURL(
+          new Blob([`
+            self.onmessage = function() {
+              // 简单的 worker，不做任何操作
+              self.postMessage({});
+            };
+          `], { type: 'application/javascript' })
+        )
+      )
+    }
   }
-})
+}
 
 // 字段类型定义
 interface FormField {
@@ -127,6 +138,7 @@ const Annotation: React.FC = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [form] = Form.useForm()
+  const { message } = App.useApp()
   
   // 状态管理
   const [siderCollapsed, setSiderCollapsed] = useState(false)
@@ -420,7 +432,7 @@ const Annotation: React.FC = () => {
           name: field.path,
           type: fieldType,
           required: field.required || false,
-          label: field.description || field.path,
+          label: field.path,
           description: field.description,
           placeholder: `请输入${field.description || field.path}`,
           default: field.default_value,
@@ -561,14 +573,24 @@ const Annotation: React.FC = () => {
               >
                 返回任务
               </Button>
-              <Breadcrumb>
-                <Breadcrumb.Item>
-                  <FileTextOutlined /> {task.name}
-                </Breadcrumb.Item>
-                <Breadcrumb.Item>
-                  <FormOutlined /> {currentDocument.filename}
-                </Breadcrumb.Item>
-              </Breadcrumb>
+              <Breadcrumb
+                items={[
+                  {
+                    title: (
+                      <span>
+                        <FileTextOutlined /> {task.name}
+                      </span>
+                    )
+                  },
+                  {
+                    title: (
+                      <span>
+                        <FormOutlined /> {currentDocument.filename}
+                      </span>
+                    )
+                  }
+                ]}
+              />
             </Space>
           </Col>
           <Col>
@@ -744,7 +766,19 @@ const Annotation: React.FC = () => {
                   folding: true,
                   wordWrap: 'on',
                   automaticLayout: true,
-                  theme: 'vs-light'
+                  theme: 'vs-light',
+                  // 禁用所有可能触发网络请求的功能
+                  quickSuggestions: false,
+                  suggestOnTriggerCharacters: false,
+                  acceptSuggestionOnEnter: 'off',
+                  tabCompletion: 'off',
+                  wordBasedSuggestions: 'off',
+                  parameterHints: { enabled: false },
+                  hover: { enabled: false },
+                  links: false,
+                  colorDecorators: false,
+                  codeLens: false,
+                  contextmenu: false
                 }}
               />
             </div>
@@ -789,34 +823,13 @@ const Annotation: React.FC = () => {
                   size="middle"
                 >
                   {formFields.map(field => (
-                    <Form.Item
+                    <FormFieldRenderer 
                       key={field.name}
-                      name={field.name}
-                      label={
-                        <Space>
-                          <span>{field.label}</span>
-                          {field.required && <Text type="danger">*</Text>}
-                        </Space>
-                      }
-                      rules={[
-                        { 
-                          required: field.required, 
-                          message: `请填写${field.label}` 
-                        },
-                        ...(field.validation?.pattern ? [{
-                          pattern: new RegExp(field.validation.pattern),
-                          message: field.validation.message || '格式不正确'
-                        }] : [])
-                      ]}
-                      extra={field.description}
-                    >
-                      <FormFieldRenderer 
-                        field={field} 
-                        form={form}
-                        validationErrors={validationErrors}
-                        disabled={currentDocument.status === 'completed'}
-                      />
-                    </Form.Item>
+                      field={field} 
+                      form={form}
+                      validationErrors={validationErrors}
+                      disabled={currentDocument.status === 'completed'}
+                    />
                   ))}
                 </Form>
               ) : (

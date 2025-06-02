@@ -9,14 +9,23 @@ import {
   Input,
   Select,
   Row,
-  Col
+  Col,
+  Layout,
+  App
 } from 'antd'
 import { 
   FileTextOutlined, 
   CodeOutlined, 
   DownloadOutlined,
   SearchOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  UploadOutlined,
+  DeleteOutlined,
+  EyeOutlined,
+  FolderOutlined,
+  MoreOutlined,
+  CloudUploadOutlined,
+  FileOutlined
 } from '@ant-design/icons'
 import { useAuthStore } from '../../stores/authStore'
 import { fileAPI } from '../../services/api'
@@ -24,8 +33,11 @@ import type { FileItem } from '../../types'
 import FileUpload from './components/FileUpload'
 import FileList from './components/FileList'
 import FilePreview from './components/FilePreview'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
-const { Title } = Typography
+const { Title, Text } = Typography
+const { Content } = Layout
+const { TabPane } = Tabs
 const { Search } = Input
 const { Option } = Select
 
@@ -47,7 +59,9 @@ interface FileLibraryState {
 }
 
 const FileLibrary: React.FC = () => {
-  const { user } = useAuthStore()
+  const queryClient = useQueryClient()
+  const { user, hasPermission } = useAuthStore()
+  const { message: appMessage } = App.useApp()
   const [activeTab, setActiveTab] = useState<string>('documents')
   const [state, setState] = useState<FileLibraryState>({
     documents: [],
@@ -82,7 +96,7 @@ const FileLibrary: React.FC = () => {
           loading: { ...prev.loading, [type]: false }
         }))
       } else {
-        message.error(response.message || `加载${getTypeLabel(type)}失败`)
+        appMessage.error(response.message || `加载${getTypeLabel(type)}失败`)
         setState(prev => ({
           ...prev,
           loading: { ...prev.loading, [type]: false }
@@ -90,7 +104,7 @@ const FileLibrary: React.FC = () => {
       }
     } catch (error) {
       console.error(`加载${type}文件失败:`, error)
-      message.error(`加载${getTypeLabel(type)}失败`)
+      appMessage.error(`加载${getTypeLabel(type)}失败`)
       setState(prev => ({
         ...prev,
         loading: { ...prev.loading, [type]: false }
@@ -115,7 +129,7 @@ const FileLibrary: React.FC = () => {
 
   // 处理文件上传成功
   const handleUploadSuccess = (file: FileItem) => {
-    message.success(`文件 ${file.filename} 上传成功`)
+    appMessage.success(`文件 ${file.filename} 上传成功`)
     refreshFiles()
   }
 
@@ -124,14 +138,14 @@ const FileLibrary: React.FC = () => {
     try {
       const response = await fileAPI.deleteFile(fileId)
       if (response.success) {
-        message.success('文件删除成功')
+        appMessage.success('文件删除成功')
         refreshFiles()
       } else {
-        message.error(response.message || '删除文件失败')
+        appMessage.error(response.message || '删除文件失败')
       }
     } catch (error) {
       console.error('删除文件失败:', error)
-      message.error('删除文件失败')
+      appMessage.error('删除文件失败')
     }
   }
 
@@ -147,10 +161,10 @@ const FileLibrary: React.FC = () => {
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
-      message.success(`文件 ${file.filename} 下载成功`)
+      appMessage.success(`文件 ${file.filename} 下载成功`)
     } catch (error) {
       console.error('下载文件失败:', error)
-      message.error('下载文件失败')
+      appMessage.error('下载文件失败')
     }
   }
 
@@ -166,7 +180,7 @@ const FileLibrary: React.FC = () => {
   // 处理批量下载
   const handleBatchDownload = async () => {
     if (state.selectedFiles.length === 0) {
-      message.warning('请选择要下载的文件')
+      appMessage.warning('请选择要下载的文件')
       return
     }
 
@@ -185,7 +199,7 @@ const FileLibrary: React.FC = () => {
   // 处理批量删除
   const handleBatchDelete = async () => {
     if (state.selectedFiles.length === 0) {
-      message.warning('请选择要删除的文件')
+      appMessage.warning('请选择要删除的文件')
       return
     }
 
