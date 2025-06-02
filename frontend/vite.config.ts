@@ -42,14 +42,12 @@ export default defineConfig({
     copyPublicDir: true,
   },
   define: {
-    // 配置Monaco Editor使用本地资源
-    'process.env.MONACO_EDITOR_CDN': JSON.stringify(false),
     // 确保 Monaco Editor 使用正确的路径
     global: 'globalThis',
   },
   optimizeDeps: {
     include: ['@monaco-editor/react', 'monaco-editor'],
-    exclude: ['monaco-editor/esm/vs/editor/editor.worker']
+    exclude: []
   },
   worker: {
     format: 'es'
