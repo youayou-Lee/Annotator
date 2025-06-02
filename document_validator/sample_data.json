@@ -1,0 +1,43 @@
+[
+    {
+        "id": "doc_001",
+        "title": "中非合作推动全球南方发展",
+        "paragraphs": [
+            {
+                "textContent": "中非合作论坛推动经济协作",
+                "page_no": 1,
+                "coordinates": [100, 120, 300, 400],
+                "sentiment": 0.8
+            },
+            {
+                "textContent": "数字经济促进可持续发展",
+                "page_no": 2,
+                "coordinates": [50, 80, 200, 300]
+            }
+        ],
+        "author": {
+            "name": "张研究员",
+            "affiliation": "国际关系研究所",
+            "contact": {"email": "zhang@example.com"}
+        },
+        "document_type": "研究报告",
+        "metadata": {"category": "政治经济"}
+    },
+    {
+        "id": "doc_002",
+        "title": "人工智能伦理框架",
+        "paragraphs": [
+            {
+                "textContent": "AI伦理需要全球共识",
+                "page_no": 1,
+                "coordinates": [90, 110, 280, 380],
+                "sentiment": 0.6
+            }
+        ],
+        "author": {
+            "name": "李教授",
+            "affiliation": "人工智能研究院"
+        },
+        "document_type": "学术论文"
+    }
+]

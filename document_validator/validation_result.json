@@ -1,0 +1,214 @@
+{
+  "document": {
+    "id": "example_001",
+    "text1": "这是一个示例文档，展示了复杂的嵌套结构标注功能。",
+    "end": 800,
+    "document_info": {
+      "title": "示例文档标题",
+      "category": "示例类别",
+      "metadata": {
+        "author": "示例作者",
+        "publish_date": "2024-01-20",
+        "classification": "公开"
+      }
+    },
+    "content_sections": [
+      {
+        "section_id": "section1",
+        "text": "第一个章节的内容",
+        "annotations": {
+          "sentiment_score": 0.6,
+          "key_entities": [
+            "示例",
+            "章节"
+          ],
+          "importance_level": 3
+        },
+        "subsections": [
+          {
+            "subsection_id": "sub1",
+            "content": "子章节内容",
+            "analysis": {
+              "topic": "示例主题",
+              "confidence": 0.9
+            }
+          }
+        ]
+      }
+    ],
+    "statistics": {
+      "word_count": 500,
+      "paragraph_count": 3,
+      "reading_time": 2
+    }
+  },
+  "validation": {
+    "valid": true,
+    "instance": "id='example_001' text1='这是一个示例文档，展示了复杂的嵌套结构标注功能。' end=800 document_info=DocumentInfo(title='示例文档标题', category='示例类别', metadata=DocumentMetadata(author='示例作者', publish_date='2024-01-20', classification='公开')) content_sections=[ContentSection(section_id='section1', text='第一个章节的内容', annotations=AnnotationInfo(sentiment_score=0.6, key_entities=['示例', '章节'], importance_level=3), subsections=[SubsectionModel(subsection_id='sub1', content='子章节内容', analysis=AnalysisInfo(topic='示例主题', confidence=0.9))])] statistics=StatisticsInfo(word_count=500, paragraph_count=3, reading_time=2)"
+  },
+  "annotations": {
+    "text1": "这是一个示例文档，展示了复杂的嵌套结构标注功能。",
+    "end": 800,
+    "document_info.title": "示例文档标题",
+    "document_info.category": "示例类别",
+    "document_info.metadata.author": "示例作者",
+    "document_info.metadata.publish_date": "2024-01-20",
+    "document_info.metadata.classification": "公开",
+    "content_sections[].text": [
+      "第一个章节的内容"
+    ],
+    "content_sections[].annotations.sentiment_score": [
+      0.6
+    ],
+    "content_sections[].annotations.key_entities": [
+      [
+        "示例",
+        "章节"
+      ]
+    ],
+    "content_sections[].annotations.importance_level": [
+      3
+    ],
+    "content_sections[].subsections[].content": [
+      [
+        "子章节内容"
+      ]
+    ],
+    "content_sections[].subsections[].analysis.topic": [
+      [
+        "示例主题"
+      ]
+    ],
+    "content_sections[].subsections[].analysis.confidence": [
+      [
+        0.9
+      ]
+    ]
+  },
+  "schema": [
+    {
+      "path": "text1",
+      "type": "str",
+      "required": true,
+      "description": "主要文本内容",
+      "constraints": {}
+    },
+    {
+      "path": "end",
+      "type": "int",
+      "required": true,
+      "description": "结束位置",
+      "constraints": {
+        "ge": 0
+      }
+    },
+    {
+      "path": "document_info.title",
+      "type": "str",
+      "required": true,
+      "description": "文档标题",
+      "constraints": {
+        "min_length": 5,
+        "max_length": 200
+      }
+    },
+    {
+      "path": "document_info.category",
+      "type": "str",
+      "required": true,
+      "description": "文档类别",
+      "constraints": {}
+    },
+    {
+      "path": "document_info.metadata.author",
+      "type": "str",
+      "required": true,
+      "description": "作者",
+      "constraints": {}
+    },
+    {
+      "path": "document_info.metadata.publish_date",
+      "type": "str",
+      "required": true,
+      "description": "发布日期",
+      "constraints": {}
+    },
+    {
+      "path": "document_info.metadata.classification",
+      "type": "str",
+      "required": true,
+      "description": "分类级别",
+      "constraints": {}
+    },
+    {
+      "path": "content_sections[].text",
+      "type": "str",
+      "required": true,
+      "description": "章节文本",
+      "constraints": {}
+    },
+    {
+      "path": "content_sections[].annotations.sentiment_score",
+      "type": "float",
+      "required": true,
+      "description": "情感分数",
+      "constraints": {
+        "ge": -1.0,
+        "le": 1.0
+      }
+    },
+    {
+      "path": "content_sections[].annotations.key_entities",
+      "type": "List",
+      "required": true,
+      "description": "关键实体",
+      "constraints": {}
+    },
+    {
+      "path": "content_sections[].annotations.importance_level",
+      "type": "int",
+      "required": true,
+      "description": "重要性等级",
+      "constraints": {
+        "ge": 1,
+        "le": 5
+      }
+    },
+    {
+      "path": "content_sections[].subsections[].content",
+      "type": "str",
+      "required": true,
+      "description": "子章节内容",
+      "constraints": {}
+    },
+    {
+      "path": "content_sections[].subsections[].analysis.topic",
+      "type": "str",
+      "required": true,
+      "description": "主题分类",
+      "constraints": {}
+    },
+    {
+      "path": "content_sections[].subsections[].analysis.confidence",
+      "type": "float",
+      "required": true,
+      "description": "置信度",
+      "constraints": {
+        "ge": 0.0,
+        "le": 1.0
+      }
+    }
+  ],
+  "file_validation": {
+    "total": 1,
+    "valid_count": 1,
+    "invalid_count": 0,
+    "results": [
+      {
+        "valid": true,
+        "instance": "id='xsFX1M41W7MugfX0' text1='继续发出中非联合自强、团结协作的时代强音，推动以高质量中非合作引领全球南方合作。' end=1213 document_info=DocumentInfo(title='中非合作论坛文件', category='政策文件', metadata=DocumentMetadata(author='外交部', publish_date='2024-01-15', classification='公开')) content_sections=[ContentSection(section_id='intro', text='中非合作论坛成立以来，中非关系实现了历史性跨越。', annotations=AnnotationInfo(sentiment_score=0.8, key_entities=['中非合作论坛', '中非关系'], importance_level=5), subsections=[SubsectionModel(subsection_id='background', content='论坛为中非友好合作提供了重要平台', analysis=AnalysisInfo(topic='合作平台', confidence=0.95))]), ContentSection(section_id='main', text='推动构建更加紧密的中非命运共同体', annotations=AnnotationInfo(sentiment_score=0.9, key_entities=['中非命运共同体'], importance_level=5), subsections=None)] statistics=StatisticsInfo(word_count=1500, paragraph_count=8, reading_time=6)",
+        "index": 0
+      }
+    ]
+  }
+}
