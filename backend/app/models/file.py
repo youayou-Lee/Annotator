@@ -9,6 +9,7 @@ class FileType(str, Enum):
     DOCUMENT = "documents"
     TEMPLATE = "templates"
     EXPORT = "exports"
+    ANNOTATION_RESULT = "annotation_results"
 
 
 class FileInfo(BaseModel):

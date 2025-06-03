@@ -466,6 +466,10 @@ class StorageManager:
         
         self._write_json(annotation_file, annotation_dict)
         
+        # 生成简洁版本的标注结果文件（与原始文档结构一致）
+        if annotation.annotation_data:
+            self._save_simple_annotation_result(annotation)
+        
         # 更新文档状态
         if annotation.status == AnnotationStatus.COMPLETED:
             self.update_document_status(annotation.task_id, annotation.document_id, DocumentStatus.COMPLETED)
@@ -473,6 +477,67 @@ class StorageManager:
             self.update_document_status(annotation.task_id, annotation.document_id, DocumentStatus.IN_PROGRESS)
         
         return annotation
+    
+    def _save_simple_annotation_result(self, annotation: Annotation):
+        """保存简洁版本的标注结果文件，结构与原始文档一致"""
+        try:
+            # 创建结果目录
+            results_dir = self.data_dir / "annotations" / annotation.task_id
+            results_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 从标注数据中提取简洁结果
+            annotation_data = annotation.annotation_data
+            simple_result = None
+            
+            # 处理不同的数据结构
+            if isinstance(annotation_data, dict):
+                if 'items' in annotation_data and isinstance(annotation_data['items'], list):
+                    # 数组结构：取items中的内容
+                    simple_result = annotation_data['items']
+                elif 'content' in annotation_data:
+                    # 单文档结构：取content中的内容
+                    simple_result = annotation_data['content']
+                else:
+                    # 直接使用标注数据，但移除标注相关的元数据
+                    simple_result = self._clean_annotation_metadata(annotation_data)
+            elif isinstance(annotation_data, list):
+                # 直接是数组
+                simple_result = annotation_data
+            else:
+                # 其他情况，直接使用
+                simple_result = annotation_data
+            
+            # 保存简洁结果文件
+            result_file = results_dir / f"{annotation.document_id}.json"
+            with open(result_file, 'w', encoding='utf-8') as f:
+                json.dump(simple_result, f, ensure_ascii=False, indent=2, default=str)
+                
+        except Exception as e:
+            # 如果生成简洁版本失败，记录错误但不影响主要流程
+            print(f"生成简洁标注结果失败: {str(e)}")
+    
+    def _clean_annotation_metadata(self, data):
+        """清理标注数据中的元数据，保留原始文档结构"""
+        if isinstance(data, dict):
+            # 创建清理后的副本
+            cleaned = {}
+            # 排除一些标注过程中的元数据字段
+            exclude_fields = {
+                'annotation_id', 'annotator_id', 'annotation_status', 
+                'created_at', 'updated_at', 'validation_errors'
+            }
+            
+            for key, value in data.items():
+                if key not in exclude_fields:
+                    if isinstance(value, (dict, list)):
+                        cleaned[key] = self._clean_annotation_metadata(value)
+                    else:
+                        cleaned[key] = value
+            return cleaned
+        elif isinstance(data, list):
+            return [self._clean_annotation_metadata(item) for item in data]
+        else:
+            return data
 
     # 文件管理
     def save_file_info(self, file_info: FileInfo):
@@ -522,6 +587,15 @@ class StorageManager:
     
     def get_file_by_id(self, file_id: str) -> Optional[FileInfo]:
         """根据ID获取文件信息"""
+        # 如果是标注结果文件ID
+        if file_id.startswith("annotation_result_"):
+            annotation_files = self.get_annotation_result_files()
+            for file_info in annotation_files:
+                if file_info.id == file_id:
+                    return file_info
+            return None
+        
+        # 常规文件查找
         files = self.get_all_files()
         for file_info in files:
             if file_info.id == file_id:
@@ -584,4 +658,60 @@ class StorageManager:
     def get_files_by_uploader(self, uploader_id: str) -> List[FileInfo]:
         """获取指定用户上传的文件"""
         files = self.get_all_files()
-        return [f for f in files if f.uploader_id == uploader_id] 
+        return [f for f in files if f.uploader_id == uploader_id]
+    
+    def get_annotation_result_files(self) -> List[FileInfo]:
+        """获取所有标注结果文件"""
+        annotations_dir = self.data_dir / "annotations"
+        files = []
+        
+        if not annotations_dir.exists():
+            return files
+        
+        for task_dir in annotations_dir.iterdir():
+            if task_dir.is_dir():
+                task_id = task_dir.name
+                
+                for result_file in task_dir.glob("*.json"):
+                    try:
+                        # 创建文件信息对象
+                        file_stat = result_file.stat()
+                        relative_path = str(result_file.relative_to(self.data_dir))
+                        
+                        # 从文件内容中获取更多信息
+                        file_content = None
+                        try:
+                            with open(result_file, 'r', encoding='utf-8') as f:
+                                file_content = json.load(f)
+                        except:
+                            pass
+                        
+                        # 生成文件描述
+                        doc_id = result_file.stem
+                        description = f"任务{task_id}的文档{doc_id}标注结果"
+                        if file_content and isinstance(file_content, list) and len(file_content) > 0:
+                            first_item = file_content[0]
+                            if isinstance(first_item, dict) and 'document_info' in first_item:
+                                doc_info = first_item['document_info']
+                                if isinstance(doc_info, dict) and 'title' in doc_info:
+                                    description = f"{doc_info['title']} - 标注结果"
+                        
+                        file_info = FileInfo(
+                            id=f"annotation_result_{task_id}_{doc_id}",
+                            filename=f"{description}.json",
+                            file_path=relative_path,
+                            file_type="annotation_results",  # 使用字符串而不是枚举
+                            file_size=file_stat.st_size,
+                            uploader_id="system",  # 系统生成的文件
+                            uploaded_at=datetime.fromtimestamp(file_stat.st_mtime)
+                        )
+                        
+                        files.append(file_info)
+                        
+                    except Exception as e:
+                        # 跳过有问题的文件
+                        continue
+        
+        # 按修改时间倒序排列
+        files.sort(key=lambda x: x.uploaded_at, reverse=True)
+        return files 

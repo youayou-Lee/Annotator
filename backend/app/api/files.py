@@ -45,7 +45,11 @@ async def get_files(
 ):
     """获取文件列表，支持按类型筛选"""
     try:
-        files = storage.get_all_files(file_type)
+        # 如果请求标注结果文件，则使用特殊的方法
+        if file_type and file_type.value == "annotation_results":
+            files = storage.get_annotation_result_files()
+        else:
+            files = storage.get_all_files(file_type)
         
         # 按上传时间倒序排列
         files.sort(key=lambda x: x.uploaded_at, reverse=True)

@@ -187,9 +187,9 @@ export const userAPI = {
 
 // 文件管理API
 export const fileAPI = {
-  getFiles: async (type?: 'documents' | 'templates' | 'exports'): Promise<ApiResponse<FileItem[]>> => {
+  getFiles: async (type?: 'documents' | 'templates' | 'annotation_results'): Promise<ApiResponse<FileItem[]>> => {
     try {
-      const response = await api.get('/files', { params: { type } })
+      const response = await api.get('/files', { params: { file_type: type } })
       // 后端返回格式: { files: FileItem[], total: number, file_type: string }
       return {
         success: true,

@@ -25,7 +25,8 @@ import {
   FolderOutlined,
   MoreOutlined,
   CloudUploadOutlined,
-  FileOutlined
+  FileOutlined,
+  FormOutlined
 } from '@ant-design/icons'
 import { useAuthStore } from '../../stores/authStore'
 import { fileAPI } from '../../services/api'
@@ -44,11 +45,11 @@ const { Option } = Select
 interface FileLibraryState {
   documents: FileItem[]
   templates: FileItem[]
-  exports: FileItem[]
+  annotation_results: FileItem[]
   loading: {
     documents: boolean
     templates: boolean
-    exports: boolean
+    annotation_results: boolean
   }
   searchTerm: string
   sortBy: 'filename' | 'file_size' | 'uploaded_at'
@@ -66,11 +67,11 @@ const FileLibrary: React.FC = () => {
   const [state, setState] = useState<FileLibraryState>({
     documents: [],
     templates: [],
-    exports: [],
+    annotation_results: [],
     loading: {
       documents: false,
       templates: false,
-      exports: false
+      annotation_results: false
     },
     searchTerm: '',
     sortBy: 'uploaded_at',
@@ -81,7 +82,7 @@ const FileLibrary: React.FC = () => {
   })
 
   // 加载文件列表
-  const loadFiles = async (type: 'documents' | 'templates' | 'exports') => {
+  const loadFiles = async (type: 'documents' | 'templates' | 'annotation_results') => {
     setState(prev => ({
       ...prev,
       loading: { ...prev.loading, [type]: true }
@@ -117,14 +118,14 @@ const FileLibrary: React.FC = () => {
     const labels = {
       documents: '文档文件',
       templates: '模板文件',
-      exports: '导出文件'
+      annotation_results: '标注结果文件'
     }
     return labels[type as keyof typeof labels] || type
   }
 
   // 刷新当前标签页的文件列表
   const refreshFiles = () => {
-    loadFiles(activeTab as 'documents' | 'templates' | 'exports')
+    loadFiles(activeTab as 'documents' | 'templates' | 'annotation_results')
   }
 
   // 处理文件上传成功
@@ -184,7 +185,7 @@ const FileLibrary: React.FC = () => {
       return
     }
 
-    const currentFiles = state[activeTab as keyof Pick<FileLibraryState, 'documents' | 'templates' | 'exports'>] as FileItem[]
+    const currentFiles = state[activeTab as keyof Pick<FileLibraryState, 'documents' | 'templates' | 'annotation_results'>] as FileItem[]
     const filesToDownload = currentFiles.filter(file => state.selectedFiles.includes(file.id))
 
     for (const file of filesToDownload) {
@@ -258,7 +259,6 @@ const FileLibrary: React.FC = () => {
 
   // 检查用户权限
   const canUpload = (type: string) => {
-    if (type === 'exports') return false // 导出文件不允许上传
     return true
   }
 
@@ -273,12 +273,12 @@ const FileLibrary: React.FC = () => {
   useEffect(() => {
     loadFiles('documents')
     loadFiles('templates')
-    loadFiles('exports')
+    loadFiles('annotation_results')
   }, [])
 
   // 标签页切换时加载对应文件
   useEffect(() => {
-    const type = activeTab as 'documents' | 'templates' | 'exports'
+    const type = activeTab as 'documents' | 'templates' | 'annotation_results'
     if (state[type].length === 0) {
       loadFiles(type)
     }
@@ -350,17 +350,17 @@ const FileLibrary: React.FC = () => {
       )
     },
     {
-      key: 'exports',
+      key: 'annotation_results',
       label: (
         <span>
-          <DownloadOutlined />
-          导出文件
+          <FormOutlined />
+          标注结果
         </span>
       ),
       children: (
         <FileList
-          files={getFilteredAndSortedFiles(state.exports)}
-          loading={state.loading.exports}
+          files={getFilteredAndSortedFiles(state.annotation_results)}
+          loading={state.loading.annotation_results}
           selectedFiles={state.selectedFiles}
           onSelectionChange={(selected: string[]) => setState(prev => ({ ...prev, selectedFiles: selected }))}
           onPreview={handleFilePreview}
@@ -453,7 +453,7 @@ const FileLibrary: React.FC = () => {
         <FilePreview
           file={state.previewFile}
           visible={state.previewVisible}
-          onClose={() => setState(prev => ({ ...prev, previewVisible: false, previewFile: null }))}
+          onCancel={() => setState(prev => ({ ...prev, previewVisible: false, previewFile: null }))}
         />
       </Card>
     </div>
