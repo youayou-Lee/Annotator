@@ -1,1 +1,0 @@
-[{"id": "valid_doc", "title": "Valid Document", "paragraphs": [{"textContent": "Content", "page_no": 1}], "author": {"name": "Author", "affiliation": "Org"}, "document_type": "Type"}, {"id": "invalid_doc", "title": "AB", "paragraphs": [{"textContent": "Content", "page_no": 0}], "author": {"name": "Author"}, "document_type": "Type"}]
