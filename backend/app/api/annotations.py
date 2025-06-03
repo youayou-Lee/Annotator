@@ -274,15 +274,7 @@ async def get_form_config(
     
     try:
         # 使用简化版文档校验模块解析模板
-        import sys
-        from pathlib import Path
-        
-        # 添加项目根目录到Python路径
-        project_root = Path(__file__).parent.parent.parent.parent
-        if str(project_root) not in sys.path:
-            sys.path.insert(0, str(project_root))
-        
-        from simple_document_validator import SimpleDocumentValidator
+        from app.core.simple_document_validator import SimpleDocumentValidator
         
         # 构建完整的模板文件路径
         template_full_path = storage.data_dir / task.template.file_path
