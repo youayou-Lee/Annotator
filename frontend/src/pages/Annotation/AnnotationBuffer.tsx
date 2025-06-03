@@ -144,31 +144,152 @@ const AnnotationBuffer: React.FC = () => {
     return fields
   }, [template])
 
-  // 从嵌套对象中获取值
+  // 从嵌套对象中获取值 - 支持数组路径和复杂结构
   const getNestedValue = (obj: any, path: string): any => {
     if (!obj || !path) return undefined
-    return path.split('.').reduce((current, key) => current?.[key], obj)
+    
+    console.log(`getNestedValue: path=${path}, obj=`, obj)
+    
+    // 特殊处理：如果文档结构是 {items: [...], type: 'array'}，则从items[0]开始
+    let current = obj
+    if (obj.items && Array.isArray(obj.items) && obj.items.length > 0 && obj.type === 'array') {
+      current = obj.items[0]
+      console.log(`  使用items[0]作为根对象:`, current)
+    }
+    
+    // 处理包含数组索引的路径 如: content_sections[].text
+    if (path.includes('[]')) {
+      const parts = path.split('[]')
+      let arrayPath = parts[0] // content_sections
+      let remainingPath = parts[1] // .text
+      
+      console.log(`  数组路径: ${arrayPath}, 剩余路径: ${remainingPath}`)
+      
+      // 获取到数组
+      const arrayKeys = arrayPath.split('.')
+      for (const key of arrayKeys) {
+        if (current && typeof current === 'object' && key in current) {
+          current = current[key]
+        } else {
+          console.log(`  数组路径中断在: ${key}`)
+          return undefined
+        }
+      }
+      
+      // 如果是数组，取第一个元素
+      if (Array.isArray(current) && current.length > 0) {
+        current = current[0]
+        console.log(`  使用数组第一个元素:`, current)
+        
+        // 处理剩余路径（去掉开头的点号）
+        if (remainingPath && remainingPath.startsWith('.')) {
+          remainingPath = remainingPath.substring(1)
+        }
+        
+        if (remainingPath) {
+          // 递归处理剩余路径（可能还有嵌套数组）
+          return getNestedValue(current, remainingPath)
+        } else {
+          return current
+        }
+      } else {
+        console.log(`  不是数组或数组为空:`, current)
+        return undefined
+      }
+    } else {
+      // 普通路径处理
+      const keys = path.split('.')
+      for (const key of keys) {
+        if (current && typeof current === 'object' && key in current) {
+          current = current[key]
+        } else {
+          console.log(`  普通路径中断在: ${key}`)
+          return undefined
+        }
+      }
+      console.log(`  普通路径结果:`, current)
+      return current
+    }
   }
 
-  // 在嵌套对象中设置值
+  // 在嵌套对象中设置值 - 支持数组路径和复杂结构
   const setNestedValue = (obj: any, path: string, value: any): any => {
     if (!path) return obj
     
-    const keys = path.split('.')
-    const result = { ...obj }
-    let current = result
+    console.log(`setNestedValue: path=${path}, value=${value}, obj=`, obj)
     
-    for (let i = 0; i < keys.length - 1; i++) {
-      const key = keys[i]
-      if (!current[key] || typeof current[key] !== 'object') {
-        current[key] = {}
-      } else {
-        current[key] = { ...current[key] }
-      }
-      current = current[key]
+    // 深拷贝对象
+    const result = JSON.parse(JSON.stringify(obj))
+    
+    // 特殊处理：如果文档结构是 {items: [...], type: 'array'}，则在items[0]中设置
+    let current = result
+    let isItemsStructure = false
+    if (result.items && Array.isArray(result.items) && result.items.length > 0 && result.type === 'array') {
+      current = result.items[0]
+      isItemsStructure = true
+      console.log(`  在items[0]中设置值`)
     }
     
-    current[keys[keys.length - 1]] = value
+    // 处理包含数组索引的路径
+    if (path.includes('[]')) {
+      const parts = path.split('[]')
+      let arrayPath = parts[0] // content_sections
+      let remainingPath = parts[1] // .text
+      
+      console.log(`  数组路径: ${arrayPath}, 剩余路径: ${remainingPath}`)
+      
+      // 获取到数组
+      const arrayKeys = arrayPath.split('.')
+      for (let i = 0; i < arrayKeys.length - 1; i++) {
+        const key = arrayKeys[i]
+        if (!current[key] || typeof current[key] !== 'object') {
+          current[key] = {}
+        }
+        current = current[key]
+      }
+      
+      // 最后一个key应该是数组
+      const lastArrayKey = arrayKeys[arrayKeys.length - 1]
+      if (!current[lastArrayKey] || !Array.isArray(current[lastArrayKey])) {
+        current[lastArrayKey] = [{}] // 确保至少有一个数组元素
+      }
+      
+      // 在数组的第一个元素中设置值
+      let arrayElement = current[lastArrayKey][0]
+      if (!arrayElement || typeof arrayElement !== 'object') {
+        arrayElement = current[lastArrayKey][0] = {}
+      }
+      
+      // 处理剩余路径
+      if (remainingPath && remainingPath.startsWith('.')) {
+        remainingPath = remainingPath.substring(1)
+      }
+      
+      if (remainingPath) {
+        // 递归处理剩余路径
+        const updatedElement = setNestedValue(arrayElement, remainingPath, value)
+        current[lastArrayKey][0] = updatedElement
+      } else {
+        current[lastArrayKey][0] = value
+      }
+    } else {
+      // 普通路径处理
+      const keys = path.split('.')
+      
+      // 创建嵌套结构
+      for (let i = 0; i < keys.length - 1; i++) {
+        const key = keys[i]
+        if (!current[key] || typeof current[key] !== 'object') {
+          current[key] = {}
+        }
+        current = current[key]
+      }
+      
+      // 设置最终值
+      current[keys[keys.length - 1]] = value
+    }
+    
+    console.log(`  设置后的结果:`, result)
     return result
   }
 
@@ -176,7 +297,15 @@ const AnnotationBuffer: React.FC = () => {
   const initializeBuffer = useMemo(() => {
     if (!currentDocument || !parseAnnotationFields.length) return null
 
+    console.log('=== 初始化缓冲区 ===')
+    console.log('当前文档:', currentDocument)
+    console.log('标注字段数量:', parseAnnotationFields.length)
+
     const originalData = currentDocument.originalContent || {}
+    const existingAnnotationData = currentDocument.annotatedContent || {}
+    
+    console.log('原始文档数据:', originalData)
+    console.log('现有标注数据:', existingAnnotationData)
     
     // 为标注字段设置原始值
     const fieldsWithOriginalValues = parseAnnotationFields.map(field => ({
@@ -184,19 +313,26 @@ const AnnotationBuffer: React.FC = () => {
       originalValue: getNestedValue(originalData, field.path)
     }))
     
+    console.log('标注字段和原始值:')
+    fieldsWithOriginalValues.forEach(field => {
+      console.log(`  ${field.path}: ${field.originalValue}`)
+    })
+    
     setAnnotationFields(fieldsWithOriginalValues)
     
     // 使用原文档内容作为标注数据的初始值
     let initialAnnotationData = { ...originalData }
     
     // 检查已有的标注数据，如果存在则覆盖对应字段
-    const existingAnnotationData = currentDocument.annotatedContent || {}
     fieldsWithOriginalValues.forEach(field => {
       const existingValue = getNestedValue(existingAnnotationData, field.path)
       if (existingValue !== undefined) {
+        console.log(`  应用现有标注值 ${field.path}: ${existingValue}`)
         initialAnnotationData = setNestedValue(initialAnnotationData, field.path, existingValue)
       }
     })
+    
+    console.log('最终初始化的标注数据:', initialAnnotationData)
     
     // 计算完成度
     const filledCount = fieldsWithOriginalValues.filter(field => {
@@ -232,9 +368,13 @@ const AnnotationBuffer: React.FC = () => {
       annotationFields.forEach(field => {
         const fieldValue = getNestedValue(initializeBuffer.annotationData, field.path)
         formValues[field.path] = fieldValue
+        console.log(`  表单字段 ${field.path}: ${fieldValue}`)
       })
       
-      console.log('设置表单值:', formValues)
+      console.log('=== 设置表单值 ===')
+      console.log('表单值对象:', formValues)
+      console.log('annotationFields长度:', annotationFields.length)
+      console.log('initializeBuffer.annotationData:', initializeBuffer.annotationData)
       form.setFieldsValue(formValues)
       
       setTimeout(() => {
@@ -682,7 +822,7 @@ const AnnotationBuffer: React.FC = () => {
             <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography.Title level={5} style={{ margin: 0 }}>
-                  <EyeOutlined /> 原始文档
+                  <EyeOutlined /> 当前标注内容
                 </Typography.Title>
                 <Space>
                   <Tooltip title="显示标注字段路径">
@@ -722,7 +862,7 @@ const AnnotationBuffer: React.FC = () => {
                 <MonacoEditor
                   height="100%"
                   language="json"
-                  value={JSON.stringify(currentDocument.originalContent, null, 2)}
+                  value={JSON.stringify(localBuffer?.annotationData || currentDocument.originalContent, null, 2)}
                   options={{
                     readOnly: true,
                     minimap: { enabled: false },

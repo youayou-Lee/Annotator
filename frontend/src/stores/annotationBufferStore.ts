@@ -109,12 +109,18 @@ export const useAnnotationBufferStore = create<AnnotationBufferState>((set, get)
     if (document) {
       const updatedDocument = {
         ...document,
-        originalContent: annotatedData,
+        // originalContent保持不变，只更新annotatedContent
         annotatedContent: annotatedData,
         status: 'in_progress' as const
       }
       const newDocuments = new Map(documents)
       newDocuments.set(documentId, updatedDocument)
+      
+      console.log('Store更新标注数据:', {
+        documentId,
+        originalContent: updatedDocument.originalContent,
+        annotatedContent: updatedDocument.annotatedContent
+      })
       
       set({
         documents: newDocuments,
