@@ -54,6 +54,7 @@ interface AnnotationFormRendererProps {
   form: FormInstance
   onFieldChange: (fieldPath: string, value: any) => void
   onResetField: (fieldPath: string) => void
+  isInitializing?: boolean
 }
 
 const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
@@ -63,7 +64,8 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
   modifiedFields,
   form,
   onFieldChange,
-  onResetField
+  onResetField,
+  isInitializing = false
 }) => {
   
   // 从嵌套对象中获取值 - 支持数组路径和复杂结构
@@ -304,6 +306,11 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
 
     // 处理值变化
     const handleValueChange = (value: any) => {
+      // 如果正在初始化，忽略变化事件
+      if (isInitializing) {
+        return
+      }
+      
       const parsedValue = parseInputValue(value, field.type, currentValue)
       onFieldChange(field.path, parsedValue)
     }
