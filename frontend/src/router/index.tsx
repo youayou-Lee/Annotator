@@ -7,6 +7,7 @@ import FileLibrary from '../pages/FileLibrary'
 import TaskList from '../pages/TaskList'
 import TaskDetail from '../pages/TaskDetail'
 import Annotation from '../pages/Annotation'
+import AnnotationBuffer from '../pages/Annotation/AnnotationBuffer'
 import Review from '../pages/Review'
 import UserManagement from '../pages/UserManagement'
 
@@ -118,6 +119,16 @@ const AppRouter = () => {
         } 
       />
       
+      {/* 新的缓存标注页面 - 需要标注权限 */}
+      <Route 
+        path="/tasks/:taskId/documents/:documentId/annotation-buffer" 
+        element={
+          <ProtectedRoute requiredPermissions={['task.annotate']}>
+            <AnnotationBuffer />
+          </ProtectedRoute>
+        } 
+      />
+      
       {/* 复审页面 - 需要复审权限 */}
       <Route 
         path="/tasks/:taskId/documents/:documentId/review" 
@@ -134,4 +145,4 @@ const AppRouter = () => {
   )
 }
 
-export default AppRouter 
+export default AppRouter

@@ -32,6 +32,7 @@ export interface FormField {
   description?: string
   placeholder?: string
   default?: any
+  originalValue?: any  // 原始文档中的值
   options?: Array<{ value: string; label: string }>
   validation?: {
     max_length?: number
@@ -186,7 +187,23 @@ const FormFieldRenderer: React.FC<FormFieldRendererProps> = ({
             message: field.validation.message || '格式不正确'
           }] : [])
         ]}
-        extra={field.description}
+        extra={
+        <div>
+          {field.description && <div style={{ marginBottom: 4 }}>{field.description}</div>}
+          {field.originalValue !== undefined && (
+            <div style={{ 
+              fontSize: '12px', 
+              color: '#666', 
+              backgroundColor: '#f5f5f5', 
+              padding: '4px 8px', 
+              borderRadius: '4px',
+              marginTop: '4px'
+            }}>
+              <strong>原始值:</strong> {String(field.originalValue)}
+            </div>
+          )}
+        </div>
+      }
       >
         {renderBasicInput()}
       </Form.Item>
@@ -205,7 +222,23 @@ const FormFieldRenderer: React.FC<FormFieldRendererProps> = ({
           message: field.validation.message || '格式不正确'
         }] : [])
       ]}
-      extra={field.description}
+      extra={
+        <div>
+          {field.description && <div style={{ marginBottom: 4 }}>{field.description}</div>}
+          {field.originalValue !== undefined && (
+            <div style={{ 
+              fontSize: '12px', 
+              color: '#666', 
+              backgroundColor: '#f5f5f5', 
+              padding: '4px 8px', 
+              borderRadius: '4px',
+              marginTop: '4px'
+            }}>
+              <strong>原始值:</strong> {String(field.originalValue)}
+            </div>
+          )}
+        </div>
+      }
     >
       {renderBasicInput()}
     </Form.Item>
@@ -384,4 +417,4 @@ const FormFieldRenderer: React.FC<FormFieldRendererProps> = ({
   }
 }
 
-export default FormFieldRenderer 
+export default FormFieldRenderer
