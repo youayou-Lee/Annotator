@@ -297,10 +297,10 @@ const FileLibrary: React.FC = () => {
         <div>
           {canUpload('documents') && (
             <FileUpload
+              visible={true}
               type="documents"
-              accept=".json,.jsonl"
+              onCancel={() => {}}
               onSuccess={handleUploadSuccess}
-              style={{ marginBottom: 16 }}
             />
           )}
           <FileList
@@ -329,10 +329,10 @@ const FileLibrary: React.FC = () => {
         <div>
           {canUpload('templates') && (
             <FileUpload
+              visible={true}
               type="templates"
-              accept=".py"
+              onCancel={() => {}}
               onSuccess={handleUploadSuccess}
-              style={{ marginBottom: 16 }}
             />
           )}
           <FileList
@@ -460,4 +460,4 @@ const FileLibrary: React.FC = () => {
   )
 }
 
-export default FileLibrary 
+export default FileLibrary
