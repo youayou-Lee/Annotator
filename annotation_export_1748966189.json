@@ -1,0 +1,24 @@
+{
+  "document_id": "doc_f56fcb01",
+  "document_filename": "sample_document.json",
+  "export_time": "2024-01-15T10:30:00.000Z",
+  "annotation_data": {
+    "items": [
+      {
+        "text1": "导出测试文本",
+        "document_info": {
+          "title": "导出测试标题"
+        }
+      }
+    ]
+  },
+  "completion_percentage": 85.7,
+  "modified_fields": [
+    "text1",
+    "document_info.title"
+  ],
+  "validation_status": {
+    "is_valid": true,
+    "errors": {}
+  }
+}

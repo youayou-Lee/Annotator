@@ -35,7 +35,8 @@ import {
   EyeOutlined,
   ReloadOutlined,
   EditOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  DownloadOutlined
 } from '@ant-design/icons'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAnnotationBufferStore } from '../../stores/annotationBufferStore'
@@ -524,10 +525,48 @@ const AnnotationBuffer: React.FC = () => {
     try {
       await saveToBackend()
       if (!isAutoSave) {
-        message.success('保存成功')
+        message.success('保存到后端成功')
       }
     } catch (error: any) {
       message.error('保存失败: ' + error.message)
+    }
+  }
+
+  // 导出文件
+  const handleExportFile = async () => {
+    if (!localBuffer || !currentDocument) return
+    
+    try {
+      // 创建导出的数据结构
+      const exportData = {
+        document_id: currentDocument.id,
+        document_filename: currentDocument.filename,
+        export_time: new Date().toISOString(),
+        annotation_data: localBuffer.annotationData,
+        completion_percentage: localBuffer.completionPercentage,
+        modified_fields: Array.from(localBuffer.modifiedFields),
+        validation_status: {
+          is_valid: localBuffer.isValid,
+          errors: localBuffer.validationErrors
+        }
+      }
+      
+      // 创建下载链接
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { 
+        type: 'application/json' 
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `annotation_${currentDocument.id}_${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      
+      message.success('文件导出成功')
+    } catch (error: any) {
+      message.error('导出失败: ' + error.message)
     }
   }
 
@@ -811,6 +850,37 @@ const AnnotationBuffer: React.FC = () => {
                     </Text>
                   </div>
                 )}
+
+                {/* 快速保存按钮组 */}
+                <div style={{ marginLeft: '20px', borderLeft: '1px solid #f0f0f0', paddingLeft: '20px' }}>
+                  <Space>
+                    <Tooltip title="立即保存到后端">
+                      <Button
+                        type={(isDirty || localBuffer.modifiedFields.size > 0) ? "primary" : "default"}
+                        icon={<SaveOutlined />}
+                        onClick={() => handleSave(false)}
+                        loading={isLoading}
+                        disabled={!isDirty && localBuffer.modifiedFields.size === 0}
+                        style={{
+                          background: (isDirty || localBuffer.modifiedFields.size > 0) ? '#52c41a' : undefined,
+                          borderColor: (isDirty || localBuffer.modifiedFields.size > 0) ? '#52c41a' : undefined
+                        }}
+                      >
+                        {(isDirty || localBuffer.modifiedFields.size > 0) ? '保存更改' : '已保存'}
+                      </Button>
+                    </Tooltip>
+                    
+                    <Tooltip title="导出标注数据为JSON文件">
+                      <Button
+                        icon={<DownloadOutlined />}
+                        onClick={handleExportFile}
+                        disabled={!localBuffer}
+                      >
+                        导出
+                      </Button>
+                    </Tooltip>
+                  </Space>
+                </div>
               </Space>
             </Col>
           </Row>
@@ -880,7 +950,7 @@ const AnnotationBuffer: React.FC = () => {
           </div>
 
           {/* 右侧：标注表单 */}
-          <div style={{ flex: 1, padding: '24px' }}>
+          <div style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column' }}>
             <Card
               title={
                 <Space>
@@ -938,9 +1008,17 @@ const AnnotationBuffer: React.FC = () => {
                   </Button>
                 </Space>
               }
-              style={{ height: '100%' }}
+              style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+              bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '16px' }}
             >
-              <div style={{ height: 'calc(100% - 80px)', overflowY: 'auto' }}>
+              {/* 表单内容区域 - 可滚动 */}
+              <div style={{ 
+                flex: 1, 
+                overflowY: 'auto', 
+                paddingRight: '8px',
+                marginBottom: '16px',
+                maxHeight: 'calc(100vh - 320px)' // 确保不超出视口
+              }}>
                 {annotationFields.length > 0 && (
                   <AnnotationFormRenderer
                     annotationFields={annotationFields}
@@ -954,9 +1032,13 @@ const AnnotationBuffer: React.FC = () => {
                 )}
               </div>
               
-              <Divider />
-              
-              <div style={{ textAlign: 'right' }}>
+              {/* 底部按钮区域 - 固定 */}
+              <div style={{ 
+                borderTop: '1px solid #f0f0f0',
+                paddingTop: '16px',
+                textAlign: 'right',
+                backgroundColor: '#fff'
+              }}>
                 <Space>
                   <Button
                     icon={<SaveOutlined />}
@@ -964,7 +1046,7 @@ const AnnotationBuffer: React.FC = () => {
                     loading={isLoading}
                     disabled={!isDirty && localBuffer.modifiedFields.size === 0}
                   >
-                    保存
+                    快速保存
                   </Button>
                   <Button
                     type="primary"
@@ -973,7 +1055,7 @@ const AnnotationBuffer: React.FC = () => {
                     loading={isLoading}
                     disabled={!localBuffer.isValid}
                   >
-                    提交
+                    完成并提交
                   </Button>
                 </Space>
               </div>

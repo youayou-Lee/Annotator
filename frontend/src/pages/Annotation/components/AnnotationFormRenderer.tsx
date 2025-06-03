@@ -66,10 +66,122 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
   onResetField
 }) => {
   
-  // 从嵌套对象中获取值
+  // 从嵌套对象中获取值 - 支持数组路径和复杂结构
   const getNestedValue = (obj: any, path: string): any => {
     if (!obj || !path) return undefined
-    return path.split('.').reduce((current, key) => current?.[key], obj)
+    
+    // 特殊处理：如果文档结构是 {items: [...], type: 'array'}，则从items[0]开始
+    let current = obj
+    if (obj.items && Array.isArray(obj.items) && obj.items.length > 0 && obj.type === 'array') {
+      current = obj.items[0]
+    }
+    
+    // 处理包含数组索引的路径 如: content_sections[].text
+    if (path.includes('[]')) {
+      const parts = path.split('[]')
+      let arrayPath = parts[0] // content_sections
+      let remainingPath = parts[1] // .text
+      
+      // 获取到数组
+      const arrayKeys = arrayPath.split('.')
+      for (const key of arrayKeys) {
+        if (current && typeof current === 'object' && key in current) {
+          current = current[key]
+        } else {
+          return undefined
+        }
+      }
+      
+      // 如果是数组，取第一个元素
+      if (Array.isArray(current) && current.length > 0) {
+        current = current[0]
+        
+        // 处理剩余路径（去掉开头的点号）
+        if (remainingPath && remainingPath.startsWith('.')) {
+          remainingPath = remainingPath.substring(1)
+        }
+        
+        if (remainingPath) {
+          // 递归处理剩余路径（可能还有嵌套数组）
+          return getNestedValue(current, remainingPath)
+        } else {
+          return current
+        }
+      } else {
+        return undefined
+      }
+    } else {
+      // 普通路径处理
+      const keys = path.split('.')
+      for (const key of keys) {
+        if (current && typeof current === 'object' && key in current) {
+          current = current[key]
+        } else {
+          return undefined
+        }
+      }
+      return current
+    }
+  }
+
+  // 格式化显示值 - 处理复杂对象和数组
+  const formatDisplayValue = (value: any): string => {
+    if (value === undefined || value === null) {
+      return ''
+    }
+    
+    if (typeof value === 'string') {
+      return value
+    }
+    
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value)
+    }
+    
+    if (Array.isArray(value)) {
+      // 数组：显示为逗号分隔的字符串
+      return value.map(item => 
+        typeof item === 'object' ? JSON.stringify(item) : String(item)
+      ).join(', ')
+    }
+    
+    if (typeof value === 'object') {
+      // 对象：显示为JSON字符串
+      return JSON.stringify(value, null, 2)
+    }
+    
+    return String(value)
+  }
+
+  // 解析输入值 - 将字符串转换回原始类型
+  const parseInputValue = (value: string, fieldType: string, originalValue: any): any => {
+    if (!value || value.trim() === '') {
+      return undefined
+    }
+    
+    // 如果原始值是对象或数组，尝试解析JSON
+    if (originalValue && typeof originalValue === 'object') {
+      try {
+        return JSON.parse(value)
+      } catch (e) {
+        // JSON解析失败，返回字符串
+        return value
+      }
+    }
+    
+    // 根据字段类型转换
+    switch (fieldType) {
+      case 'int':
+        const intVal = parseInt(value, 10)
+        return isNaN(intVal) ? undefined : intVal
+      case 'float':
+        const floatVal = parseFloat(value)
+        return isNaN(floatVal) ? undefined : floatVal
+      case 'bool':
+        return value === 'true' || value === '1' || value === 'yes'
+      default:
+        return value
+    }
   }
 
   // 渲染字段标签
@@ -180,19 +292,31 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
   // 渲染不同类型的输入控件
   const renderInputControl = (field: AnnotationField) => {
     const currentValue = getNestedValue(formData, field.path)
+    const displayValue = formatDisplayValue(currentValue)
+    
+    const isComplexValue = currentValue && typeof currentValue === 'object'
     const isTextArea = field.type === 'str' && (
       field.constraints?.max_length > 100 || 
       field.description?.includes('文本') || 
-      field.description?.includes('内容')
+      field.description?.includes('内容') ||
+      isComplexValue
     )
+
+    // 处理值变化
+    const handleValueChange = (value: any) => {
+      const parsedValue = parseInputValue(value, field.type, currentValue)
+      onFieldChange(field.path, parsedValue)
+    }
 
     switch (field.type) {
       case 'str':
-        if (isTextArea) {
+        if (isTextArea || isComplexValue) {
           return (
             <TextArea
+              value={displayValue}
+              onChange={(e) => handleValueChange(e.target.value)}
               placeholder={field.description || `请输入${field.path}`}
-              rows={4}
+              rows={isComplexValue ? 6 : 4}
               showCount={field.constraints?.max_length ? true : false}
               maxLength={field.constraints?.max_length}
             />
@@ -200,6 +324,8 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
         } else {
           return (
             <Input
+              value={displayValue}
+              onChange={(e) => handleValueChange(e.target.value)}
               placeholder={field.description || `请输入${field.path}`}
               maxLength={field.constraints?.max_length}
             />
@@ -209,6 +335,8 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
       case 'int':
         return (
           <InputNumber
+            value={currentValue}
+            onChange={(value) => handleValueChange(value)}
             placeholder={field.description || `请输入${field.path}`}
             style={{ width: '100%' }}
             min={field.constraints?.ge}
@@ -220,6 +348,8 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
       case 'float':
         return (
           <InputNumber
+            value={currentValue}
+            onChange={(value) => handleValueChange(value)}
             placeholder={field.description || `请输入${field.path}`}
             style={{ width: '100%' }}
             min={field.constraints?.ge}
@@ -231,6 +361,8 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
       case 'bool':
         return (
           <Switch
+            checked={currentValue}
+            onChange={(checked) => handleValueChange(checked)}
             checkedChildren="是"
             unCheckedChildren="否"
           />
@@ -239,6 +371,8 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
       case 'date':
         return (
           <DatePicker
+            value={currentValue ? dayjs(currentValue) : undefined}
+            onChange={(date) => handleValueChange(date ? date.format('YYYY-MM-DD') : undefined)}
             style={{ width: '100%' }}
             placeholder={field.description || `请选择${field.path}`}
           />
@@ -247,6 +381,8 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
       case 'datetime':
         return (
           <DatePicker
+            value={currentValue ? dayjs(currentValue) : undefined}
+            onChange={(date) => handleValueChange(date ? date.toISOString() : undefined)}
             style={{ width: '100%' }}
             showTime
             placeholder={field.description || `请选择${field.path}`}
@@ -258,6 +394,8 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
         if (field.constraints?.enum) {
           return (
             <Select
+              value={currentValue}
+              onChange={(value) => handleValueChange(value)}
               placeholder={field.description || `请选择${field.path}`}
               style={{ width: '100%' }}
               allowClear
@@ -271,9 +409,23 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
           )
         }
         
+        // 复杂类型使用多行文本框
+        if (isComplexValue) {
+          return (
+            <TextArea
+              value={displayValue}
+              onChange={(e) => handleValueChange(e.target.value)}
+              placeholder={field.description || `请输入${field.path}（JSON格式）`}
+              rows={6}
+            />
+          )
+        }
+        
         // 默认使用文本输入
         return (
           <Input
+            value={displayValue}
+            onChange={(e) => handleValueChange(e.target.value)}
             placeholder={field.description || `请输入${field.path}`}
           />
         )
