@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useMemo } from 'react'
 import {
   Layout,
   Typography,
@@ -19,7 +19,10 @@ import {
   Row,
   Col,
   Card,
-  Divider
+  Divider,
+  Progress,
+  Tooltip,
+  Modal
 } from 'antd'
 import {
   ArrowLeftOutlined,
@@ -29,67 +32,54 @@ import {
   RightOutlined,
   FileTextOutlined,
   FormOutlined,
-  EyeOutlined
+  EyeOutlined,
+  ReloadOutlined,
+  EditOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAnnotationBufferStore } from '../../stores/annotationBufferStore'
-import FormFieldRenderer, { FormField as FormFieldType } from './components/FormFieldRenderer'
+import AnnotationFormRenderer from './components/AnnotationFormRenderer'
 import MonacoEditor from '@monaco-editor/react'
-import dayjs from 'dayjs'
 
 const { Title, Text } = Typography
 const { Sider, Content } = Layout
-const { TextArea } = Input
-const { Option } = Select
 
-// 辅助函数：获取嵌套对象的值
-const getNestedValue = (obj: any, path: string): any => {
-  if (!obj || !path) return undefined
-  
-  const keys = path.split('.')
-  let current = obj
-  
-  for (const key of keys) {
-    if (current === null || current === undefined) {
-      return undefined
-    }
-    current = current[key]
-  }
-  
-  return current
+// 标注字段接口
+interface AnnotationField {
+  path: string
+  type: string
+  required: boolean
+  description: string
+  constraints: Record<string, any>
+  defaultValue?: any
+  originalValue?: any
 }
 
-// 辅助函数：设置嵌套对象的值
-const setNestedValue = (obj: any, path: string, value: any): any => {
-  if (!path) return obj
-  
-  const keys = path.split('.')
-  const result = { ...obj }
-  let current = result
-  
-  for (let i = 0; i < keys.length - 1; i++) {
-    const key = keys[i]
-    if (current[key] === undefined || current[key] === null) {
-      current[key] = {}
-    } else {
-      current[key] = { ...current[key] }
-    }
-    current = current[key]
-  }
-  
-  current[keys[keys.length - 1]] = value
-  return result
+// 数据缓冲区接口  
+interface DataBuffer {
+  documentId: string
+  originalData: Record<string, any>
+  annotationData: Record<string, any>
+  modifiedFields: Set<string>
+  validationErrors: Record<string, string[]>
+  isValid: boolean
+  completionPercentage: number
 }
 
 const AnnotationBuffer: React.FC = () => {
   const { taskId, documentId } = useParams<{ taskId: string; documentId: string }>()
   const navigate = useNavigate()
   const [form] = Form.useForm()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   
   // 状态管理
   const [siderCollapsed, setSiderCollapsed] = useState(false)
+  const [localBuffer, setLocalBuffer] = useState<DataBuffer | null>(null)
+  const [annotationFields, setAnnotationFields] = useState<AnnotationField[]>([])
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true)
   const isInitializingRef = useRef(false)
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
   
   // 使用buffer store
   const {
@@ -126,89 +116,276 @@ const AnnotationBuffer: React.FC = () => {
   const currentDocument = getCurrentDocument()
   const allDocuments = getAllDocuments()
 
-  // 初始化表单数据 - 将原始文档内容映射到表单字段
+  // 解析标注字段 - 专门处理 is_annotation: true 的字段
+  const parseAnnotationFields = useMemo(() => {
+    if (!template?.fields) return []
+    
+    const fields: AnnotationField[] = []
+    
+    template.fields.forEach((field: any) => {
+      // 只处理标注字段
+      if (field.constraints?.is_annotation === true || 
+          field.description?.includes('标注') ||
+          field.field_type !== 'str' || // 非字符串类型通常需要标注
+          field.required) { // 必填字段通常需要标注
+        
+        fields.push({
+          path: field.path,
+          type: field.field_type,
+          required: field.required || false,
+          description: field.description || field.path,
+          constraints: field.constraints || {},
+          defaultValue: field.default_value,
+          originalValue: undefined // 将在初始化buffer时设置
+        })
+      }
+    })
+    
+    return fields
+  }, [template])
+
+  // 从嵌套对象中获取值
+  const getNestedValue = (obj: any, path: string): any => {
+    if (!obj || !path) return undefined
+    return path.split('.').reduce((current, key) => current?.[key], obj)
+  }
+
+  // 在嵌套对象中设置值
+  const setNestedValue = (obj: any, path: string, value: any): any => {
+    if (!path) return obj
+    
+    const keys = path.split('.')
+    const result = { ...obj }
+    let current = result
+    
+    for (let i = 0; i < keys.length - 1; i++) {
+      const key = keys[i]
+      if (!current[key] || typeof current[key] !== 'object') {
+        current[key] = {}
+      } else {
+        current[key] = { ...current[key] }
+      }
+      current = current[key]
+    }
+    
+    current[keys[keys.length - 1]] = value
+    return result
+  }
+
+  // 初始化本地数据缓冲区
+  const initializeBuffer = useMemo(() => {
+    if (!currentDocument || !parseAnnotationFields.length) return null
+
+    const originalData = currentDocument.originalContent || {}
+    
+    // 为标注字段设置原始值
+    const fieldsWithOriginalValues = parseAnnotationFields.map(field => ({
+      ...field,
+      originalValue: getNestedValue(originalData, field.path)
+    }))
+    
+    setAnnotationFields(fieldsWithOriginalValues)
+    
+    // 使用原文档内容作为标注数据的初始值
+    let initialAnnotationData = { ...originalData }
+    
+    // 检查已有的标注数据，如果存在则覆盖对应字段
+    const existingAnnotationData = currentDocument.annotatedContent || {}
+    fieldsWithOriginalValues.forEach(field => {
+      const existingValue = getNestedValue(existingAnnotationData, field.path)
+      if (existingValue !== undefined) {
+        initialAnnotationData = setNestedValue(initialAnnotationData, field.path, existingValue)
+      }
+    })
+    
+    // 计算完成度
+    const filledCount = fieldsWithOriginalValues.filter(field => {
+      const value = getNestedValue(initialAnnotationData, field.path)
+      return value !== undefined && value !== '' && value !== null
+    }).length
+    
+    const completionPercentage = fieldsWithOriginalValues.length > 0 
+      ? (filledCount / fieldsWithOriginalValues.length) * 100 
+      : 0
+
+    return {
+      documentId: currentDocument.id,
+      originalData,
+      annotationData: initialAnnotationData,
+      modifiedFields: new Set<string>(),
+      validationErrors: {},
+      isValid: true,
+      completionPercentage
+    }
+  }, [currentDocument, parseAnnotationFields])
+
+  // 更新本地缓冲区
   useEffect(() => {
-    if (currentDocument && template?.fields) {
+    if (initializeBuffer) {
+      setLocalBuffer(initializeBuffer)
+      
+      // 初始化表单值 - 为嵌套字段创建正确的表单值结构
       isInitializingRef.current = true
       
-      // 合并原始文档内容和已标注内容
-      const initialValues = { ...currentDocument.annotatedContent }
-      
-      // 将原始文档内容按字段路径映射到表单
-      template.fields.forEach((field: any) => {
-        const fieldPath = field.path
-        const originalValue = getNestedValue(currentDocument.originalContent, fieldPath)
-        
-        // 如果标注内容中没有该字段值，则使用原始文档的值
-        if (initialValues[fieldPath] === undefined && originalValue !== undefined) {
-          initialValues[fieldPath] = originalValue
-        }
+      // 为每个标注字段设置表单值
+      const formValues: Record<string, any> = {}
+      annotationFields.forEach(field => {
+        const fieldValue = getNestedValue(initializeBuffer.annotationData, field.path)
+        formValues[field.path] = fieldValue
       })
       
-      // 检查是否需要更新
-      const needsUpdate = Object.keys(initialValues).some(key => 
-        JSON.stringify(initialValues[key]) !== JSON.stringify(currentDocument.annotatedContent[key])
-      )
+      console.log('设置表单值:', formValues)
+      form.setFieldsValue(formValues)
       
-      // 只有在值确实发生变化时才更新
-      if (needsUpdate) {
-        // 先更新buffer，避免触发循环
-        updateAnnotation(currentDocument.id, initialValues)
-      }
-      
-      // 设置表单值
-      form.setFieldsValue(initialValues)
-      
-      // 延迟重置初始化标志，确保setFieldsValue完成
       setTimeout(() => {
         isInitializingRef.current = false
       }, 0)
     }
-  }, [currentDocument, template, form, updateAnnotation])
+  }, [initializeBuffer, form, annotationFields])
 
-  // 表单值变化处理 - 支持嵌套字段路径
-  const handleFormChange = (changedValues: any, allValues: any) => {
-    // 如果正在初始化，跳过更新以避免循环
-    if (isInitializingRef.current || !currentDocument) {
-      return
+  // 验证单个字段
+  const validateField = (field: AnnotationField, value: any): string[] => {
+    const errors: string[] = []
+    
+    // 必填验证
+    if (field.required && (value === undefined || value === '' || value === null)) {
+      errors.push(`${field.path}是必填项`)
     }
     
-    // 处理嵌套字段路径
-    let updatedValues = { ...currentDocument.annotatedContent }
+    // 类型验证
+    if (value !== undefined && value !== null && value !== '') {
+      const { constraints } = field
+      
+      if (field.type === 'str' && typeof value === 'string') {
+        if (constraints.min_length && value.length < constraints.min_length) {
+          errors.push(`${field.path}长度不能少于${constraints.min_length}个字符`)
+        }
+        if (constraints.max_length && value.length > constraints.max_length) {
+          errors.push(`${field.path}长度不能超过${constraints.max_length}个字符`)
+        }
+      }
+      
+      if ((field.type === 'int' || field.type === 'float') && typeof value === 'number') {
+        if (constraints.ge !== undefined && value < constraints.ge) {
+          errors.push(`${field.path}不能小于${constraints.ge}`)
+        }
+        if (constraints.le !== undefined && value > constraints.le) {
+          errors.push(`${field.path}不能大于${constraints.le}`)
+        }
+      }
+    }
     
-    // 遍历变化的值，按字段路径设置到正确位置
-    Object.keys(changedValues).forEach(fieldPath => {
-      if (fieldPath.includes('.')) {
-        // 嵌套字段路径
-        updatedValues = setNestedValue(updatedValues, fieldPath, changedValues[fieldPath])
-      } else {
-        // 简单字段
-        updatedValues[fieldPath] = changedValues[fieldPath]
+    return errors
+  }
+
+  // 验证所有字段
+  const validateAllFields = (data: Record<string, any>): { isValid: boolean, errors: Record<string, string[]> } => {
+    const errors: Record<string, string[]> = {}
+    
+    annotationFields.forEach(field => {
+      const value = getNestedValue(data, field.path)
+      const fieldErrors = validateField(field, value)
+      if (fieldErrors.length > 0) {
+        errors[field.path] = fieldErrors
       }
     })
     
-    // 合并所有表单值
-    Object.keys(allValues).forEach(fieldPath => {
-      if (fieldPath.includes('.')) {
-        updatedValues = setNestedValue(updatedValues, fieldPath, allValues[fieldPath])
-      } else {
-        updatedValues[fieldPath] = allValues[fieldPath]
-      }
-    })
-    
-    // 检查是否真的有变化，避免不必要的更新
-    const hasChanges = JSON.stringify(updatedValues) !== JSON.stringify(currentDocument.annotatedContent)
-    
-    if (hasChanges) {
-      updateAnnotation(currentDocument.id, updatedValues)
+    return {
+      isValid: Object.keys(errors).length === 0,
+      errors
     }
   }
 
+  // 处理字段变化
+  const handleFieldChange = (fieldPath: string, value: any) => {
+    if (isInitializingRef.current || !localBuffer) return
+
+    console.log('字段变化:', fieldPath, '新值:', value)
+
+    // 更新缓冲区数据（标注数据即为文档内容）
+    const updatedAnnotationData = setNestedValue(localBuffer.annotationData, fieldPath, value)
+    
+    // 同时更新原始数据，确保文档内容与标注字段保持一致
+    const updatedOriginalData = setNestedValue(localBuffer.originalData, fieldPath, value)
+    
+    // 验证变更字段
+    const field = annotationFields.find(f => f.path === fieldPath)
+    const fieldErrors = field ? validateField(field, value) : []
+    
+    // 更新验证错误
+    const updatedErrors = { ...localBuffer.validationErrors }
+    if (fieldErrors.length > 0) {
+      updatedErrors[fieldPath] = fieldErrors
+    } else {
+      delete updatedErrors[fieldPath]
+    }
+    
+    // 检查是否被修改（与原始文档内容比较）
+    const updatedModifiedFields = new Set(localBuffer.modifiedFields)
+    const originalValue = field?.originalValue
+    if (value !== originalValue) {
+      updatedModifiedFields.add(fieldPath)
+    } else {
+      updatedModifiedFields.delete(fieldPath)
+    }
+    
+    // 计算完成度
+    const filledCount = annotationFields.filter(field => {
+      const fieldValue = getNestedValue(updatedAnnotationData, field.path)
+      return fieldValue !== undefined && fieldValue !== '' && fieldValue !== null
+    }).length
+    
+    const completionPercentage = annotationFields.length > 0 
+      ? (filledCount / annotationFields.length) * 100 
+      : 0
+
+    // 更新本地缓冲区
+    const updatedBuffer: DataBuffer = {
+      ...localBuffer,
+      originalData: updatedOriginalData,
+      annotationData: updatedAnnotationData,
+      modifiedFields: updatedModifiedFields,
+      validationErrors: updatedErrors,
+      isValid: Object.keys(updatedErrors).length === 0,
+      completionPercentage
+    }
+    
+    setLocalBuffer(updatedBuffer)
+    
+    // 同步到全局store，更新文档内容和标注数据
+    updateAnnotation(currentDocument!.id, updatedAnnotationData)
+    
+    console.log('更新后的数据:', {
+      originalData: updatedOriginalData,
+      annotationData: updatedAnnotationData
+    })
+    
+    // 自动保存
+    if (autoSaveEnabled) {
+      scheduleAutoSave()
+    }
+  }
+
+  // 计划自动保存
+  const scheduleAutoSave = () => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current)
+    }
+    
+    autoSaveTimerRef.current = setTimeout(() => {
+      handleSave(true)
+    }, 2000) // 2秒后自动保存
+  }
+
   // 保存标注数据
-  const handleSave = async () => {
+  const handleSave = async (isAutoSave = false) => {
+    if (!localBuffer) return
+    
     try {
       await saveToBackend()
-      message.success('保存成功')
+      if (!isAutoSave) {
+        message.success('保存成功')
+      }
     } catch (error: any) {
       message.error('保存失败: ' + error.message)
     }
@@ -216,19 +393,40 @@ const AnnotationBuffer: React.FC = () => {
 
   // 提交标注
   const handleSubmit = async () => {
+    if (!localBuffer || !currentDocument) {
+      message.error('数据未准备就绪')
+      return
+    }
+    
     try {
-      const values = await form.validateFields()
-      if (currentDocument) {
-        updateAnnotation(currentDocument.id, values)
-        await saveToBackend()
-        message.success('提交成功')
+      // 验证所有字段
+      const validation = validateAllFields(localBuffer.annotationData)
+      
+      if (!validation.isValid) {
+        const errorMessages = Object.entries(validation.errors)
+          .map(([field, errors]) => `${field}: ${errors.join(', ')}`)
+          .join('; ')
         
-        // 跳转到下一个文档
-        const currentIndex = allDocuments.findIndex(doc => doc.id === currentDocument.id)
-        if (currentIndex < allDocuments.length - 1) {
-          const nextDoc = allDocuments[currentIndex + 1]
-          navigate(`/tasks/${taskId}/documents/${nextDoc.id}/annotation-buffer`)
-        }
+        message.error(`表单验证失败: ${errorMessages}`)
+        return
+      }
+      
+      // 保存并提交
+      await saveToBackend()
+      message.success('提交成功')
+      
+      // 跳转到下一个文档
+      const currentIndex = allDocuments.findIndex(doc => doc.id === currentDocument.id)
+      if (currentIndex < allDocuments.length - 1) {
+        const nextDoc = allDocuments[currentIndex + 1]
+        navigate(`/tasks/${taskId}/documents/${nextDoc.id}/annotation-buffer`)
+      } else {
+        // 如果是最后一个文档，询问是否返回任务列表
+        modal.confirm({
+          title: '标注完成',
+          content: '已完成所有文档的标注，是否返回任务列表？',
+          onOk: () => navigate(`/tasks/${taskId}`)
+        })
       }
     } catch (error: any) {
       message.error('提交失败: ' + error.message)
@@ -237,7 +435,22 @@ const AnnotationBuffer: React.FC = () => {
 
   // 切换文档
   const handleDocumentChange = (docId: string) => {
-    navigate(`/tasks/${taskId}/documents/${docId}/annotation-buffer`)
+    // 如果有未保存的更改，提示用户
+    if (isDirty) {
+      modal.confirm({
+        title: '有未保存的更改',
+        content: '当前文档有未保存的更改，是否保存后切换？',
+        onOk: async () => {
+          await handleSave()
+          navigate(`/tasks/${taskId}/documents/${docId}/annotation-buffer`)
+        },
+        onCancel: () => {
+          navigate(`/tasks/${taskId}/documents/${docId}/annotation-buffer`)
+        }
+      })
+    } else {
+      navigate(`/tasks/${taskId}/documents/${docId}/annotation-buffer`)
+    }
   }
 
   // 上一个/下一个文档
@@ -261,67 +474,55 @@ const AnnotationBuffer: React.FC = () => {
     }
   }
 
-  // 转换后端字段格式为前端期望的格式
-  const convertFieldsToFormFields = (fields: any[]): FormFieldType[] => {
-    return fields.map((field: any) => {
-      // 字段类型映射
-      const typeMapping: Record<string, FormFieldType['type']> = {
-        'str': 'string',
-        'int': 'number',
-        'float': 'number',
-        'bool': 'boolean',
-        'List': 'array',
-        'dict': 'object',
-        'date': 'date',
-        'datetime': 'datetime',
-        'time': 'time'
-      }
-
-      // 根据约束条件判断是否为文本域
-      const isTextArea = field.constraints?.max_length > 100 || 
-                        field.description?.includes('文本') || 
-                        field.description?.includes('内容')
-
-      const fieldType = field.field_type === 'str' && isTextArea ? 'text' : 
-                       typeMapping[field.field_type] || 'string'
-
-      // 获取原始文档中对应字段的值作为默认值
-      const originalValue = currentDocument ? getNestedValue(currentDocument.originalContent, field.path) : undefined
-      const annotatedValue = currentDocument ? getNestedValue(currentDocument.annotatedContent, field.path) : undefined
-      
-      // 优先使用已标注的值，其次使用原始文档的值，最后使用字段定义的默认值
-      const defaultValue = annotatedValue !== undefined ? annotatedValue : 
-                          originalValue !== undefined ? originalValue : 
-                          field.default_value
-
-      return {
-        name: field.path,
-        type: fieldType,
-        required: field.required || false,
-        label: field.description || field.path,
-        description: field.description,
-        placeholder: originalValue ? `原始值: ${String(originalValue).substring(0, 50)}${String(originalValue).length > 50 ? '...' : ''}` : `请输入${field.description || field.path}`,
-        default: defaultValue,
-        originalValue: originalValue,  // 添加原始值
-        options: field.options ? field.options.map((opt: any) => ({
-          value: opt.value || opt,
-          label: opt.label || opt
-        })) : undefined,
-        validation: {
-          max_length: field.constraints?.max_length,
-          min_length: field.constraints?.min_length,
-          max_value: field.constraints?.le,
-          min_value: field.constraints?.ge,
-        },
-        ui: {
-          rows: isTextArea ? 4 : undefined,
+  // 重置字段到原始值
+  const handleResetField = (fieldPath: string) => {
+    if (!localBuffer) return
+    
+    const field = annotationFields.find(f => f.path === fieldPath)
+    if (field) {
+      handleFieldChange(fieldPath, field.originalValue)
+      form.setFieldValue(fieldPath, field.originalValue)
+      message.success(`已重置 ${field.path} 到原始值`)
+    }
+  }
+  
+  // 重置所有字段到原始值
+  const handleResetAllFields = () => {
+    if (!localBuffer) return
+    
+    modal.confirm({
+      title: '确认重置',
+      content: '确定要将所有字段重置到原始值吗？此操作不可撤销。',
+      onOk: () => {
+        const resetData = { ...localBuffer.originalData }
+        
+        // 设置表单值
+        form.setFieldsValue(resetData)
+        
+        // 更新缓冲区
+        const updatedBuffer: DataBuffer = {
+          ...localBuffer,
+          annotationData: resetData,
+          modifiedFields: new Set(),
+          validationErrors: {},
+          isValid: true
         }
+        
+        setLocalBuffer(updatedBuffer)
+        updateAnnotation(currentDocument!.id, resetData)
+        message.success('已重置所有字段到原始值')
       }
     })
   }
 
-  // 获取转换后的表单字段
-  const formFields = template?.fields ? convertFieldsToFormFields(template.fields) : []
+  // 清理定时器
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
+      }
+    }
+  }, [])
 
   if (isLoading) {
     return (
@@ -331,10 +532,10 @@ const AnnotationBuffer: React.FC = () => {
     )
   }
 
-  if (!currentDocument) {
+  if (!currentDocument || !localBuffer) {
     return (
       <div style={{ padding: '20px' }}>
-        <Alert message="未找到文档数据" type="warning" />
+        <Alert message="未找到文档数据或缓冲区未初始化" type="warning" />
       </div>
     )
   }
@@ -440,10 +641,33 @@ const AnnotationBuffer: React.FC = () => {
                   </Text>
                 </div>
                 
-                {isDirty && (
+                <div style={{ textAlign: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                    完成度
+                  </Text>
+                  <Text strong style={{ color: localBuffer.completionPercentage === 100 ? '#52c41a' : '#1890ff' }}>
+                    {localBuffer.completionPercentage.toFixed(1)}%
+                  </Text>
+                </div>
+                
+                <div style={{ textAlign: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                    自动保存
+                  </Text>
+                  <Switch
+                    size="small"
+                    checked={autoSaveEnabled}
+                    onChange={setAutoSaveEnabled}
+                  />
+                </div>
+                
+                {(isDirty || localBuffer.modifiedFields.size > 0) && (
                   <div style={{ textAlign: 'center' }}>
                     <Text type="warning" style={{ fontSize: 12, display: 'block' }}>
-                      有未保存更改
+                      未保存更改
+                    </Text>
+                    <Text strong style={{ color: '#fa8c16' }}>
+                      {localBuffer.modifiedFields.size} 个字段
                     </Text>
                   </div>
                 )}
@@ -460,6 +684,33 @@ const AnnotationBuffer: React.FC = () => {
                 <Typography.Title level={5} style={{ margin: 0 }}>
                   <EyeOutlined /> 原始文档
                 </Typography.Title>
+                <Space>
+                  <Tooltip title="显示标注字段路径">
+                    <Button 
+                      icon={<InfoCircleOutlined />} 
+                      size="small"
+                      onClick={() => {
+                        modal.info({
+                          title: '标注字段信息',
+                          content: (
+                            <div>
+                              <p>当前模板包含 {annotationFields.length} 个标注字段：</p>
+                              <ul>
+                                {annotationFields.map(field => (
+                                  <li key={field.path}>
+                                    <strong>{field.path}</strong>: {field.description}
+                                    {field.required && <span style={{ color: 'red' }}> *</span>}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ),
+                          width: 600
+                        })
+                      }}
+                    />
+                  </Tooltip>
+                </Space>
               </div>
               
               <div style={{ 
@@ -471,7 +722,7 @@ const AnnotationBuffer: React.FC = () => {
                 <MonacoEditor
                   height="100%"
                   language="json"
-                  value={currentDocument.originalContent ? JSON.stringify(currentDocument.originalContent, null, 2) : '{}'}
+                  value={JSON.stringify(currentDocument.originalContent, null, 2)}
                   options={{
                     readOnly: true,
                     minimap: { enabled: false },
@@ -481,19 +732,7 @@ const AnnotationBuffer: React.FC = () => {
                     folding: true,
                     wordWrap: 'on',
                     automaticLayout: true,
-                    theme: 'vs-light',
-                    // 禁用所有可能触发网络请求的功能
-                    quickSuggestions: false,
-                    suggestOnTriggerCharacters: false,
-                    acceptSuggestionOnEnter: 'off',
-                    tabCompletion: 'off',
-                    wordBasedSuggestions: 'off',
-                    parameterHints: { enabled: false },
-                    hover: { enabled: false },
-                    links: false,
-                    colorDecorators: false,
-                    codeLens: false,
-                    contextmenu: false
+                    theme: 'vs-light'
                   }}
                 />
               </div>
@@ -503,9 +742,46 @@ const AnnotationBuffer: React.FC = () => {
           {/* 右侧：标注表单 */}
           <div style={{ flex: 1, padding: '24px' }}>
             <Card
-              title="标注表单"
+              title={
+                <Space>
+                  <span>标注表单</span>
+                  <Badge 
+                    count={`${annotationFields.filter(f => {
+                      const value = getNestedValue(localBuffer.annotationData, f.path)
+                      return value !== undefined && value !== '' && value !== null
+                    }).length}/${annotationFields.length}`}
+                    style={{ backgroundColor: '#52c41a' }}
+                  />
+                  <Progress 
+                    percent={localBuffer.completionPercentage} 
+                    size="small" 
+                    style={{ width: 60 }}
+                    strokeColor={localBuffer.completionPercentage === 100 ? '#52c41a' : '#1890ff'}
+                  />
+                  {localBuffer.modifiedFields.size > 0 && (
+                    <Badge 
+                      count={`已修改: ${localBuffer.modifiedFields.size}`}
+                      style={{ backgroundColor: '#fa8c16' }}
+                    />
+                  )}
+                  {!localBuffer.isValid && (
+                    <Badge 
+                      count="有错误" 
+                      style={{ backgroundColor: '#ff4d4f' }}
+                    />
+                  )}
+                </Space>
+              }
               extra={
                 <Space>
+                  <Button
+                    size="small"
+                    icon={<ReloadOutlined />}
+                    onClick={handleResetAllFields}
+                    disabled={localBuffer.modifiedFields.size === 0}
+                  >
+                    重置所有
+                  </Button>
                   <Button
                     icon={<LeftOutlined />}
                     onClick={handlePrevDocument}
@@ -524,22 +800,18 @@ const AnnotationBuffer: React.FC = () => {
               }
               style={{ height: '100%' }}
             >
-              <div style={{ height: 'calc(100% - 60px)', overflowY: 'auto' }}>
-                <Form
-                  form={form}
-                  layout="vertical"
-                  onValuesChange={handleFormChange}
-                >
-                  {formFields.map((field: FormFieldType) => (
-                    <FormFieldRenderer
-                      key={field.name}
-                      field={field}
-                      form={form}
-                      validationErrors={{}}
-                      disabled={false}
-                    />
-                  ))}
-                </Form>
+              <div style={{ height: 'calc(100% - 80px)', overflowY: 'auto' }}>
+                {annotationFields.length > 0 && (
+                  <AnnotationFormRenderer
+                    annotationFields={annotationFields}
+                    formData={localBuffer.annotationData}
+                    validationErrors={localBuffer.validationErrors}
+                    modifiedFields={localBuffer.modifiedFields}
+                    form={form}
+                    onFieldChange={handleFieldChange}
+                    onResetField={handleResetField}
+                  />
+                )}
               </div>
               
               <Divider />
@@ -548,8 +820,9 @@ const AnnotationBuffer: React.FC = () => {
                 <Space>
                   <Button
                     icon={<SaveOutlined />}
-                    onClick={handleSave}
+                    onClick={() => handleSave(false)}
                     loading={isLoading}
+                    disabled={!isDirty && localBuffer.modifiedFields.size === 0}
                   >
                     保存
                   </Button>
@@ -558,6 +831,7 @@ const AnnotationBuffer: React.FC = () => {
                     icon={<CheckOutlined />}
                     onClick={handleSubmit}
                     loading={isLoading}
+                    disabled={!localBuffer.isValid}
                   >
                     提交
                   </Button>

@@ -300,12 +300,16 @@ async def get_form_config(
         # 转换为前端表单配置格式
         fields = []
         for field_schema in annotation_schema:
+            # 构建constraints字典，包含is_annotation信息
+            constraints = field_schema.get("constraints", {}).copy()
+            constraints["is_annotation"] = True  # 所有从annotation_schema来的字段都是标注字段
+            
             field_config = FormFieldConfig(
                 path=field_schema["path"],
                 field_type=field_schema["type"],
                 required=field_schema["required"],
                 description=field_schema.get("description", ""),
-                constraints=field_schema.get("constraints", {}),
+                constraints=constraints,
                 default_value=field_schema.get("default"),
                 options=field_schema.get("options")
             )

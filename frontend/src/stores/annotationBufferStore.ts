@@ -63,7 +63,7 @@ export const useAnnotationBufferStore = create<AnnotationBufferState>((set, get)
         
         // 获取已有标注数据
         const annotationResponse = await annotationAPI.getAnnotation(taskId, documentId)
-        const annotatedContent = annotationResponse.success ? annotationResponse.data.annotated_data : {}
+        const annotatedContent = (annotationResponse.success && annotationResponse.data) ? annotationResponse.data.annotated_data : {}
         
         documents.set(documentId, {
           id: documentId,
@@ -109,6 +109,7 @@ export const useAnnotationBufferStore = create<AnnotationBufferState>((set, get)
     if (document) {
       const updatedDocument = {
         ...document,
+        originalContent: annotatedData,
         annotatedContent: annotatedData,
         status: 'in_progress' as const
       }
