@@ -127,6 +127,39 @@ const TYPE_MAPPING: Record<string, FormFieldConfig['type']> = {
   'time': 'time'
 }
 
+// 在文件顶部添加一个格式化函数
+const formatDisplayValue = (value: any): string => {
+  if (value === undefined || value === null) {
+    return ''
+  }
+  
+  if (typeof value === 'string') {
+    return value
+  }
+  
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  
+  if (Array.isArray(value)) {
+    // 数组：如果数组很简单，显示为逗号分隔；否则显示JSON
+    if (value.length === 0) {
+      return '[]'
+    }
+    if (value.every(item => typeof item === 'string' || typeof item === 'number')) {
+      return value.join(', ')
+    }
+    return JSON.stringify(value, null, 2)
+  }
+  
+  if (typeof value === 'object') {
+    // 对象：显示为简洁的JSON字符串
+    return JSON.stringify(value, null, 2)
+  }
+  
+  return String(value)
+}
+
 const DynamicFormGenerator: React.FC<DynamicFormGeneratorProps> = ({
   templateFields,
   documentContent,
@@ -171,7 +204,7 @@ const DynamicFormGenerator: React.FC<DynamicFormGeneratorProps> = ({
         label: field.description || field.path,
         description: field.description,
         placeholder: originalValue ? 
-          `原始值: ${String(originalValue).substring(0, 50)}${String(originalValue).length > 50 ? '...' : ''}` : 
+          `原始值: ${formatDisplayValue(originalValue).substring(0, 50)}${formatDisplayValue(originalValue).length > 50 ? '...' : ''}` : 
           `请输入${field.description || field.path}`,
         defaultValue,
         originalValue,
@@ -292,9 +325,9 @@ const DynamicFormGenerator: React.FC<DynamicFormGeneratorProps> = ({
                 <EyeOutlined />
                 <strong>原始值:</strong> 
                 <span style={{ wordBreak: 'break-all' }}>
-                  {String(field.originalValue).length > 100 ? 
-                    `${String(field.originalValue).substring(0, 100)}...` : 
-                    String(field.originalValue)
+                  {formatDisplayValue(field.originalValue).length > 100 ? 
+                    `${formatDisplayValue(field.originalValue).substring(0, 100)}...` : 
+                    formatDisplayValue(field.originalValue)
                   }
                 </span>
               </div>
@@ -465,4 +498,3 @@ const DynamicFormGenerator: React.FC<DynamicFormGeneratorProps> = ({
 
 export default DynamicFormGenerator
 export { getNestedValue, setNestedValue }
-export type { TemplateField, FormFieldConfig }

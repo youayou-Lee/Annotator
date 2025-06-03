@@ -158,16 +158,17 @@ const AnnotationBuffer: React.FC = () => {
       console.log(`  使用items[0]作为根对象:`, current)
     }
     
-    // 处理包含数组索引的路径 如: content_sections[].text
+    // 处理包含数组索引的路径 如: content_sections[].subsections[].analysis.topic
     if (path.includes('[]')) {
-      const parts = path.split('[]')
-      let arrayPath = parts[0] // content_sections
-      let remainingPath = parts[1] // .text
+      // 找到第一个数组标记
+      const firstArrayIndex = path.indexOf('[]')
+      const beforeArray = path.substring(0, firstArrayIndex) // content_sections
+      const afterArray = path.substring(firstArrayIndex + 2) // .subsections[].analysis.topic
       
-      console.log(`  数组路径: ${arrayPath}, 剩余路径: ${remainingPath}`)
+      console.log(`  数组路径: ${beforeArray}, 剩余路径: ${afterArray}`)
       
       // 获取到数组
-      const arrayKeys = arrayPath.split('.')
+      const arrayKeys = beforeArray.split('.')
       for (const key of arrayKeys) {
         if (current && typeof current === 'object' && key in current) {
           current = current[key]
@@ -183,6 +184,7 @@ const AnnotationBuffer: React.FC = () => {
         console.log(`  使用数组第一个元素:`, current)
         
         // 处理剩余路径（去掉开头的点号）
+        let remainingPath = afterArray
         if (remainingPath && remainingPath.startsWith('.')) {
           remainingPath = remainingPath.substring(1)
         }
@@ -233,14 +235,15 @@ const AnnotationBuffer: React.FC = () => {
     
     // 处理包含数组索引的路径
     if (path.includes('[]')) {
-      const parts = path.split('[]')
-      let arrayPath = parts[0] // content_sections
-      let remainingPath = parts[1] // .text
+      // 找到第一个数组标记
+      const firstArrayIndex = path.indexOf('[]')
+      const beforeArray = path.substring(0, firstArrayIndex) // content_sections
+      const afterArray = path.substring(firstArrayIndex + 2) // .subsections[].analysis.topic
       
-      console.log(`  数组路径: ${arrayPath}, 剩余路径: ${remainingPath}`)
+      console.log(`  数组路径: ${beforeArray}, 剩余路径: ${afterArray}`)
       
       // 获取到数组
-      const arrayKeys = arrayPath.split('.')
+      const arrayKeys = beforeArray.split('.')
       for (let i = 0; i < arrayKeys.length - 1; i++) {
         const key = arrayKeys[i]
         if (!current[key] || typeof current[key] !== 'object') {
@@ -262,6 +265,7 @@ const AnnotationBuffer: React.FC = () => {
       }
       
       // 处理剩余路径
+      let remainingPath = afterArray
       if (remainingPath && remainingPath.startsWith('.')) {
         remainingPath = remainingPath.substring(1)
       }

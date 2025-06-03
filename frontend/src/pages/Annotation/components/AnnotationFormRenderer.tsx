@@ -277,7 +277,7 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
     if (originalValue !== undefined && originalValue !== currentValue) {
       helpElements.push(
         <div key="original" style={{ color: '#1890ff', fontSize: 12 }}>
-          原始值: {String(originalValue)}
+          原始值: {formatDisplayValue(originalValue)}
         </div>
       )
     }

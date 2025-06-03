@@ -101,6 +101,39 @@ const getArraySubPath = (path: string): string => {
   return parts.length > 1 ? parts[1].substring(1) : '' // 去掉开头的点
 }
 
+// 格式化显示值 - 处理复杂对象和数组
+const formatDisplayValue = (value: any): string => {
+  if (value === undefined || value === null) {
+    return ''
+  }
+  
+  if (typeof value === 'string') {
+    return value
+  }
+  
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  
+  if (Array.isArray(value)) {
+    // 数组：如果数组很简单，显示为逗号分隔；否则显示JSON
+    if (value.length === 0) {
+      return '[]'
+    }
+    if (value.every(item => typeof item === 'string' || typeof item === 'number')) {
+      return value.join(', ')
+    }
+    return JSON.stringify(value, null, 2)
+  }
+  
+  if (typeof value === 'object') {
+    // 对象：显示为简洁的JSON字符串
+    return JSON.stringify(value, null, 2)
+  }
+  
+  return String(value)
+}
+
 const FormFieldRenderer: React.FC<FormFieldRendererProps> = ({
   field,
   form,
@@ -199,7 +232,7 @@ const FormFieldRenderer: React.FC<FormFieldRendererProps> = ({
               borderRadius: '4px',
               marginTop: '4px'
             }}>
-              <strong>原始值:</strong> {String(field.originalValue)}
+              <strong>原始值:</strong> {formatDisplayValue(field.originalValue)}
             </div>
           )}
         </div>
@@ -234,7 +267,7 @@ const FormFieldRenderer: React.FC<FormFieldRendererProps> = ({
               borderRadius: '4px',
               marginTop: '4px'
             }}>
-              <strong>原始值:</strong> {String(field.originalValue)}
+              <strong>原始值:</strong> {formatDisplayValue(field.originalValue)}
             </div>
           )}
         </div>
