@@ -6,7 +6,6 @@ import Register from '../pages/Login/Register'
 import FileLibrary from '../pages/FileLibrary'
 import TaskList from '../pages/TaskList'
 import TaskDetail from '../pages/TaskDetail'
-import Annotation from '../pages/Annotation'
 import AnnotationBuffer from '../pages/Annotation/AnnotationBuffer'
 import Review from '../pages/Review'
 import UserManagement from '../pages/UserManagement'
@@ -112,16 +111,6 @@ const AppRouter = () => {
       {/* 标注页面 - 需要标注权限 */}
       <Route 
         path="/tasks/:taskId/documents/:documentId/annotation" 
-        element={
-          <ProtectedRoute requiredPermissions={['task.annotate']}>
-            <Annotation />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* 新的缓存标注页面 - 需要标注权限 */}
-      <Route 
-        path="/tasks/:taskId/documents/:documentId/annotation-buffer" 
         element={
           <ProtectedRoute requiredPermissions={['task.annotate']}>
             <AnnotationBuffer />

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import {
   Layout,
   Typography,
@@ -89,6 +89,7 @@ const AnnotationBuffer: React.FC = () => {
   
   // 状态管理
   const [siderCollapsed, setSiderCollapsed] = useState(false)
+  const isInitializingRef = useRef(false)
   
   // 使用buffer store
   const {
@@ -128,6 +129,8 @@ const AnnotationBuffer: React.FC = () => {
   // 初始化表单数据 - 将原始文档内容映射到表单字段
   useEffect(() => {
     if (currentDocument && template?.fields) {
+      isInitializingRef.current = true
+      
       // 合并原始文档内容和已标注内容
       const initialValues = { ...currentDocument.annotatedContent }
       
@@ -142,41 +145,61 @@ const AnnotationBuffer: React.FC = () => {
         }
       })
       
-      form.setFieldsValue(initialValues)
+      // 检查是否需要更新
+      const needsUpdate = Object.keys(initialValues).some(key => 
+        JSON.stringify(initialValues[key]) !== JSON.stringify(currentDocument.annotatedContent[key])
+      )
       
-      // 同步到buffer
-      if (Object.keys(initialValues).length > 0) {
+      // 只有在值确实发生变化时才更新
+      if (needsUpdate) {
+        // 先更新buffer，避免触发循环
         updateAnnotation(currentDocument.id, initialValues)
       }
+      
+      // 设置表单值
+      form.setFieldsValue(initialValues)
+      
+      // 延迟重置初始化标志，确保setFieldsValue完成
+      setTimeout(() => {
+        isInitializingRef.current = false
+      }, 0)
     }
   }, [currentDocument, template, form, updateAnnotation])
 
   // 表单值变化处理 - 支持嵌套字段路径
   const handleFormChange = (changedValues: any, allValues: any) => {
-    if (currentDocument) {
-      // 处理嵌套字段路径
-      let updatedValues = { ...currentDocument.annotatedContent }
-      
-      // 遍历变化的值，按字段路径设置到正确位置
-      Object.keys(changedValues).forEach(fieldPath => {
-        if (fieldPath.includes('.')) {
-          // 嵌套字段路径
-          updatedValues = setNestedValue(updatedValues, fieldPath, changedValues[fieldPath])
-        } else {
-          // 简单字段
-          updatedValues[fieldPath] = changedValues[fieldPath]
-        }
-      })
-      
-      // 合并所有表单值
-      Object.keys(allValues).forEach(fieldPath => {
-        if (fieldPath.includes('.')) {
-          updatedValues = setNestedValue(updatedValues, fieldPath, allValues[fieldPath])
-        } else {
-          updatedValues[fieldPath] = allValues[fieldPath]
-        }
-      })
-      
+    // 如果正在初始化，跳过更新以避免循环
+    if (isInitializingRef.current || !currentDocument) {
+      return
+    }
+    
+    // 处理嵌套字段路径
+    let updatedValues = { ...currentDocument.annotatedContent }
+    
+    // 遍历变化的值，按字段路径设置到正确位置
+    Object.keys(changedValues).forEach(fieldPath => {
+      if (fieldPath.includes('.')) {
+        // 嵌套字段路径
+        updatedValues = setNestedValue(updatedValues, fieldPath, changedValues[fieldPath])
+      } else {
+        // 简单字段
+        updatedValues[fieldPath] = changedValues[fieldPath]
+      }
+    })
+    
+    // 合并所有表单值
+    Object.keys(allValues).forEach(fieldPath => {
+      if (fieldPath.includes('.')) {
+        updatedValues = setNestedValue(updatedValues, fieldPath, allValues[fieldPath])
+      } else {
+        updatedValues[fieldPath] = allValues[fieldPath]
+      }
+    })
+    
+    // 检查是否真的有变化，避免不必要的更新
+    const hasChanges = JSON.stringify(updatedValues) !== JSON.stringify(currentDocument.annotatedContent)
+    
+    if (hasChanges) {
       updateAnnotation(currentDocument.id, updatedValues)
     }
   }
