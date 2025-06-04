@@ -107,17 +107,22 @@ export const useAnnotationBufferStore = create<AnnotationBufferState>((set, get)
     const { documents } = get()
     const document = documents.get(documentId)
     if (document) {
+      // 只有在文档状态为pending时才改为in_progress，其他状态保持不变
+      const newStatus = document.status === 'pending' ? 'in_progress' : document.status
+      
       const updatedDocument = {
         ...document,
         // originalContent保持不变，只更新annotatedContent
         annotatedContent: annotatedData,
-        status: 'in_progress' as const
+        status: newStatus
       }
       const newDocuments = new Map(documents)
       newDocuments.set(documentId, updatedDocument)
       
       console.log('Store更新标注数据:', {
         documentId,
+        originalStatus: document.status,
+        newStatus,
         originalContent: updatedDocument.originalContent,
         annotatedContent: updatedDocument.annotatedContent
       })

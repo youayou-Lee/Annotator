@@ -112,6 +112,7 @@ const TaskDetail: React.FC = () => {
   const getDocumentStatusTag = (status: string) => {
     const statusMap = {
       pending: { color: 'orange', text: '待标注' },
+      in_progress: { color: 'blue', text: '标注中' },
       completed: { color: 'green', text: '已完成' }
     }
     const config = statusMap[status as keyof typeof statusMap] || { color: 'default', text: status }
@@ -177,14 +178,14 @@ const TaskDetail: React.FC = () => {
 
         return (
           <Space>
-            {canAnnotate && record.status === 'pending' && (
+            {canAnnotate && (record.status === 'pending' || record.status === 'in_progress') && (
               <Button
                 type="primary"
                 size="small"
                 icon={<EditOutlined />}
                 onClick={() => handleStartAnnotation(record.id)}
               >
-                开始标注
+                {record.status === 'pending' ? '开始标注' : '继续标注'}
               </Button>
             )}
             {record.status === 'completed' && (

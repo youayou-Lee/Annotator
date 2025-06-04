@@ -57,7 +57,7 @@ export interface TaskDocument {
   id: string
   filename: string
   file_path: string
-  status: 'pending' | 'completed'
+  status: 'pending' | 'in_progress' | 'completed'
   annotation_count?: number
 }
 

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   Form,
   Input,
@@ -54,7 +54,6 @@ interface AnnotationFormRendererProps {
   form: FormInstance
   onFieldChange: (fieldPath: string, value: any) => void
   onResetField: (fieldPath: string) => void
-  isInitializing?: boolean
 }
 
 const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
@@ -64,10 +63,68 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
   modifiedFields,
   form,
   onFieldChange,
-  onResetField,
-  isInitializing = false
+  onResetField
 }) => {
   
+  // 本地输入状态，用于处理实时输入
+  const [localInputValues, setLocalInputValues] = useState<Record<string, any>>({})
+  
+  // 当formData变化时，更新本地状态（主要用于对象切换）
+  useEffect(() => {
+    // 清理所有防抖定时器，避免延迟更新干扰新对象的数据
+    Object.values(debounceTimeouts.current).forEach(timeout => {
+      if (timeout) clearTimeout(timeout)
+    })
+    debounceTimeouts.current = {}
+    
+    const newLocalValues: Record<string, any> = {}
+    annotationFields.forEach(field => {
+      const value = getNestedValue(formData, field.path)
+      newLocalValues[field.path] = value
+    })
+    setLocalInputValues(newLocalValues)
+    
+    // 同时更新表单的值，确保表单和本地状态同步
+    const formValues: Record<string, any> = {}
+    annotationFields.forEach(field => {
+      const value = getNestedValue(formData, field.path)
+      formValues[field.path] = value
+    })
+    form.setFieldsValue(formValues)
+  }, [formData, annotationFields, form])
+  
+  // 防抖处理输入变化
+  const debounceTimeouts = React.useRef<Record<string, NodeJS.Timeout>>({})
+  
+  const handleInputChange = useCallback((fieldPath: string, value: any) => {
+    // 立即更新本地状态，确保UI响应
+    setLocalInputValues(prev => ({
+      ...prev,
+      [fieldPath]: value
+    }))
+    
+    // 清除之前的防抖定时器
+    if (debounceTimeouts.current[fieldPath]) {
+      clearTimeout(debounceTimeouts.current[fieldPath])
+    }
+    
+    // 设置新的防抖定时器
+    debounceTimeouts.current[fieldPath] = setTimeout(() => {
+      onFieldChange(fieldPath, value)
+      delete debounceTimeouts.current[fieldPath]
+    }, 300) // 300ms 防抖，比之前更长
+  }, [onFieldChange])
+  
+  // 组件卸载时清理定时器
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimeouts.current).forEach(timeout => {
+        if (timeout) clearTimeout(timeout)
+      })
+      debounceTimeouts.current = {}
+    }
+  }, [])
+
   // 从嵌套对象中获取值 - 支持数组路径和复杂结构
   const getNestedValue = (obj: any, path: string): any => {
     if (!obj || !path) return undefined
@@ -293,7 +350,7 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
 
   // 渲染不同类型的输入控件
   const renderInputControl = (field: AnnotationField) => {
-    const currentValue = getNestedValue(formData, field.path)
+    const currentValue = localInputValues[field.path]
     const displayValue = formatDisplayValue(currentValue)
     
     const isComplexValue = currentValue && typeof currentValue === 'object'
@@ -306,13 +363,8 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
 
     // 处理值变化
     const handleValueChange = (value: any) => {
-      // 如果正在初始化，忽略变化事件
-      if (isInitializing) {
-        return
-      }
-      
       const parsedValue = parseInputValue(value, field.type, currentValue)
-      onFieldChange(field.path, parsedValue)
+      handleInputChange(field.path, parsedValue)
     }
 
     switch (field.type) {
@@ -571,12 +623,6 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
         form={form}
         layout="vertical"
         size="small"
-        onValuesChange={(changedValues, allValues) => {
-          // 处理值变化 - 对每个变化的字段调用onFieldChange
-          Object.keys(changedValues).forEach(fieldPath => {
-            onFieldChange(fieldPath, changedValues[fieldPath])
-          })
-        }}
       >
         {Object.entries(groupedFields).map(([groupName, fields]) =>
           renderFieldGroup(groupName, fields)
