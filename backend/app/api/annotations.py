@@ -172,7 +172,7 @@ async def get_document_content(
     document_id: str,
     current_user: UserInDB = Depends(get_current_user)
 ):
-    """获取原始JSON文档内容"""
+    """获取文档内容 - 优先返回标注结果，如果没有则返回原始JSON文档内容"""
     # 检查任务权限
     task = storage.get_task_by_id(task_id)
     if not task:
@@ -200,7 +200,32 @@ async def get_document_content(
             detail="文档不存在"
         )
     
-    # 读取文档内容
+    # 优先尝试读取标注结果
+    annotation_result_path = f"annotations/{task_id}/{document_id}.json"
+    result_content = storage.get_file_content(annotation_result_path)
+    
+    if result_content:
+        # 找到标注结果，使用标注后的内容
+        try:
+            content = json.loads(result_content)
+            
+            # 如果内容是数组，包装成对象
+            if isinstance(content, list):
+                content = {"items": content, "type": "array", "count": len(content)}
+            
+            # 格式化内容用于显示
+            formatted_content = json.dumps(content, ensure_ascii=False, indent=2)
+            
+            return DocumentContentResponse(
+                document_id=document_id,
+                content=content,
+                formatted_content=formatted_content
+            )
+        except json.JSONDecodeError as e:
+            # 标注结果文件格式错误，继续尝试原始文档
+            pass
+    
+    # 没有标注结果或标注结果无效，读取原始文档内容
     content_str = storage.get_file_content(document.file_path)
     if content_str is None:
         raise HTTPException(
