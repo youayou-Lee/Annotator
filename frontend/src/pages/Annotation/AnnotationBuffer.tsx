@@ -323,36 +323,13 @@ const AnnotationBuffer: React.FC = () => {
     return documentBuffer?.objects[currentObjectIndex] || null
   }, [documentBuffer, currentObjectIndex])
 
-  // 验证单个字段
+  // 验证单个字段 - 简化为只检查必填项
   const validateField = (field: AnnotationField, value: any): string[] => {
     const errors: string[] = []
     
-    // 必填验证
+    // 只进行必填验证，其他复杂校验留给后端
     if (field.required && (value === undefined || value === '' || value === null)) {
       errors.push(`${field.path}是必填项`)
-    }
-    
-    // 类型验证
-    if (value !== undefined && value !== null && value !== '') {
-      const { constraints } = field
-      
-      if (field.type === 'str' && typeof value === 'string') {
-        if (constraints.min_length && value.length < constraints.min_length) {
-          errors.push(`${field.path}长度不能少于${constraints.min_length}个字符`)
-        }
-        if (constraints.max_length && value.length > constraints.max_length) {
-          errors.push(`${field.path}长度不能超过${constraints.max_length}个字符`)
-        }
-      }
-      
-      if ((field.type === 'int' || field.type === 'float') && typeof value === 'number') {
-        if (constraints.ge !== undefined && value < constraints.ge) {
-          errors.push(`${field.path}不能小于${constraints.ge}`)
-        }
-        if (constraints.le !== undefined && value > constraints.le) {
-          errors.push(`${field.path}不能大于${constraints.le}`)
-        }
-      }
     }
     
     return errors
@@ -493,10 +470,12 @@ const AnnotationBuffer: React.FC = () => {
         // 更新store中的标注数据
         updateAnnotation(documentBuffer.documentId, completeAnnotationData)
         
-        // 清除所有对象的修改标记
+        // 如果保存成功，清除所有校验错误和修改标记
         const updatedBuffer = { ...documentBuffer }
         updatedBuffer.objects.forEach(obj => {
           obj.modifiedFields.clear()
+          obj.validationErrors = {} // 清除前端校验错误
+          obj.isValid = true // 后端验证通过，标记为有效
         })
         setDocumentBuffer(updatedBuffer)
         
@@ -506,7 +485,49 @@ const AnnotationBuffer: React.FC = () => {
       }
     } catch (error: any) {
       console.error('保存失败:', error)
-      message.error('保存失败: ' + error.message)
+      
+      // 检查是否包含校验错误
+      let validationErrors: Record<string, any> | null = null
+      
+      if (error.response?.data?.validation_errors) {
+        validationErrors = error.response.data.validation_errors
+      } else if (error.response?.data?.detail && typeof error.response.data.detail === 'object') {
+        validationErrors = error.response.data.detail
+      }
+      
+      if (validationErrors) {
+        // 处理后端返回的校验错误
+        const updatedBuffer = { ...documentBuffer }
+        
+        // 清除所有对象的现有校验错误
+        updatedBuffer.objects.forEach(obj => {
+          obj.validationErrors = {}
+          obj.isValid = true
+        })
+        
+        // 应用后端校验错误
+        Object.entries(validationErrors).forEach(([path, errors]) => {
+          const errorArray = Array.isArray(errors) ? errors : [errors]
+          
+          // 判断错误属于哪个对象（如果是多对象情况）
+          if (updatedBuffer.objectsCount === 1) {
+            updatedBuffer.objects[0].validationErrors[path] = errorArray
+            updatedBuffer.objects[0].isValid = false
+          } else {
+            // 多对象情况，需要根据路径判断属于哪个对象
+            // 这里需要根据实际的路径结构来判断
+            updatedBuffer.objects.forEach(obj => {
+              obj.validationErrors[path] = errorArray
+              obj.isValid = false
+            })
+          }
+        })
+        
+        setDocumentBuffer(updatedBuffer)
+        message.error('保存失败：数据校验错误，请检查标注内容')
+      } else {
+        message.error('保存失败: ' + error.message)
+      }
     }
   }
 

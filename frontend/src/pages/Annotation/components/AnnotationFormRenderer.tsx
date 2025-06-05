@@ -35,6 +35,14 @@ const { Group: CheckboxGroup } = Checkbox
 const { Group: RadioGroup } = Radio
 const { Text } = Typography
 
+/**
+ * 标注表单渲染器
+ * 
+ * 注意：此组件现在只进行基础的前端类型校验（必填项检查）
+ * 复杂的数据校验（如约束检查、格式验证等）交由后端处理
+ * 前端允许用户输入各种值，在保存时后端会返回详细的校验错误信息
+ */
+
 // 标注字段接口
 interface AnnotationField {
   path: string
@@ -212,34 +220,70 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
     return String(value)
   }
 
-  // 解析输入值 - 将字符串转换回原始类型
-  const parseInputValue = (value: string, fieldType: string, originalValue: any): any => {
-    if (!value || value.trim() === '') {
+  // 解析输入值 - 将各种类型的输入值转换为合适的格式
+  const parseInputValue = (value: any, fieldType: string, originalValue: any): any => {
+    // 调试日志 - 在开发环境下显示输入值类型
+    if (process.env.NODE_ENV === 'development') {
+      console.log('parseInputValue:', { value, type: typeof value, fieldType })
+    }
+    
+    // 如果是 null 或 undefined，直接返回
+    if (value === null || value === undefined) {
       return undefined
     }
     
-    // 如果原始值是对象或数组，尝试解析JSON
-    if (originalValue && typeof originalValue === 'object') {
-      try {
-        return JSON.parse(value)
-      } catch (e) {
-        // JSON解析失败，返回字符串
-        return value
-      }
+    // 对于空字符串，保持原样，让后端进行验证
+    if (value === '') {
+      return ''
     }
     
-    // 根据字段类型转换
+    // 如果是字符串类型，进行trim检查
+    if (typeof value === 'string' && value.trim() === '') {
+      return undefined
+    }
+    
+    // 如果已经是目标类型，直接返回（比如InputNumber返回的数字）
     switch (fieldType) {
       case 'int':
-        const intVal = parseInt(value, 10)
-        return isNaN(intVal) ? undefined : intVal
       case 'float':
-        const floatVal = parseFloat(value)
-        return isNaN(floatVal) ? undefined : floatVal
-      case 'bool':
-        return value === 'true' || value === '1' || value === 'yes'
-      default:
+        if (typeof value === 'number') {
+          return value
+        }
+        // 如果是字符串，尝试转换
+        if (typeof value === 'string') {
+          const numVal = fieldType === 'int' ? parseInt(value, 10) : parseFloat(value)
+          return isNaN(numVal) ? value : numVal
+        }
         return value
+
+      case 'bool':
+        if (typeof value === 'boolean') {
+          return value
+        }
+        // 如果是字符串，尝试转换布尔值
+        if (typeof value === 'string') {
+          if (value === 'true' || value === '1' || value === 'yes' || value === 'True') {
+            return true
+          } else if (value === 'false' || value === '0' || value === 'no' || value === 'False') {
+            return false
+          }
+        }
+        return value
+
+      case 'str':
+      default:
+        // 如果原始值是对象或数组，且输入是字符串，尝试解析JSON
+        if (originalValue && typeof originalValue === 'object' && typeof value === 'string') {
+          try {
+            return JSON.parse(value)
+          } catch (e) {
+            // JSON解析失败，保持字符串形式，让后端验证
+            return value
+          }
+        }
+        
+        // 对于字符串类型，确保返回字符串
+        return String(value)
     }
   }
 
@@ -294,7 +338,7 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
     
     const helpElements = []
     
-    // 显示验证错误
+    // 显示验证错误（主要来自后端）
     if (errors.length > 0) {
       helpElements.push(
         <div key="errors" style={{ color: '#ff4d4f' }}>
@@ -305,29 +349,28 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
       )
     }
     
-    // 显示约束信息
-    const constraints = []
-    if (field.type === 'str') {
-      if (field.constraints.min_length) {
-        constraints.push(`最少${field.constraints.min_length}个字符`)
-      }
-      if (field.constraints.max_length) {
-        constraints.push(`最多${field.constraints.max_length}个字符`)
-      }
+    // 简化的约束提示（只显示基本信息）
+    const basicInfo = []
+    if (field.type === 'str' && field.constraints?.max_length) {
+      basicInfo.push(`最多${field.constraints.max_length}字符`)
     }
     if (field.type === 'int' || field.type === 'float') {
-      if (field.constraints.ge !== undefined) {
-        constraints.push(`≥ ${field.constraints.ge}`)
+      const range = []
+      if (field.constraints?.ge !== undefined) {
+        range.push(`≥${field.constraints.ge}`)
       }
-      if (field.constraints.le !== undefined) {
-        constraints.push(`≤ ${field.constraints.le}`)
+      if (field.constraints?.le !== undefined) {
+        range.push(`≤${field.constraints.le}`)
+      }
+      if (range.length > 0) {
+        basicInfo.push(range.join(', '))
       }
     }
     
-    if (constraints.length > 0) {
+    if (basicInfo.length > 0) {
       helpElements.push(
-        <div key="constraints" style={{ color: '#8c8c8c', fontSize: 12 }}>
-          约束: {constraints.join(', ')}
+        <div key="basic-info" style={{ color: '#8c8c8c', fontSize: 12 }}>
+          {basicInfo.join(', ')}
         </div>
       )
     }
@@ -363,8 +406,14 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
 
     // 处理值变化
     const handleValueChange = (value: any) => {
-      const parsedValue = parseInputValue(value, field.type, currentValue)
-      handleInputChange(field.path, parsedValue)
+      try {
+        const parsedValue = parseInputValue(value, field.type, currentValue)
+        handleInputChange(field.path, parsedValue)
+      } catch (error) {
+        console.error('Error in handleValueChange:', error, { value, fieldType: field.type, fieldPath: field.path })
+        // 如果解析失败，直接传递原值
+        handleInputChange(field.path, value)
+      }
     }
 
     switch (field.type) {
@@ -549,7 +598,21 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
                   }
                 ]}
               >
-                {renderInputControl(field)}
+                {(() => {
+                  try {
+                    return renderInputControl(field)
+                  } catch (error: any) {
+                    console.error('Error rendering field:', field.path, error)
+                    return (
+                      <Input 
+                        placeholder={`字段渲染错误: ${field.path}`}
+                        disabled
+                        style={{ color: 'red' }}
+                        value={`Error: ${error?.message || '未知错误'}`}
+                      />
+                    )
+                  }
+                })()}
               </Form.Item>
             </Col>
           ))}
