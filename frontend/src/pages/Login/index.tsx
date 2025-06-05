@@ -131,12 +131,7 @@ const Login: React.FC = () => {
           </Divider>
 
           <Space direction="vertical" style={{ width: '100%' }}>
-            <Text type="secondary" style={{ fontSize: '12px' }}>
-              管理员: admin / admin123
-            </Text>
-            <Text type="secondary" style={{ fontSize: '12px' }}>
-              标注员: annotator / 123456
-            </Text>
+
           </Space>
         </Card>
       </div>

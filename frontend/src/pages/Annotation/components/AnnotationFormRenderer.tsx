@@ -679,7 +679,7 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
       {/* 全局错误提示 */}
       {errorFields > 0 && (
         <Alert
-          message="表单验证错误"
+          message="表单验证错误,详情请按F12查看"
           description={`发现 ${errorFields} 个字段存在验证错误，请检查并修正。`}
           type="error"
           showIcon
