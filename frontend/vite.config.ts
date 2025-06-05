@@ -50,9 +50,17 @@ export default defineConfig({
     exclude: []
   },
   worker: {
-    format: 'es'
+    format: 'es',
+    plugins: [react()]
   },
   assetsInclude: ['**/*.wasm'],
   // 静态资源处理
-  publicDir: 'public'
+  publicDir: 'public',
+  // 改善 Monaco Editor 的错误处理
+  esbuild: {
+    // 忽略某些警告
+    logOverride: {
+      'this-is-undefined-in-esm': 'silent'
+    }
+  }
 }) 
