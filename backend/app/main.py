@@ -133,12 +133,12 @@ async def simple_docs():
         <h3>Example:</h3>
         <pre>
 # Register a user
-curl -X POST "http://localhost:8000/api/auth/register" \
+curl -X POST "http://192.168.103.164:8000/api/auth/register" \
      -H "Content-Type: application/json" \
      -d '{"username":"admin","password":"admin123","role":"admin"}'
 
 # Login
-curl -X POST "http://localhost:8000/api/auth/login" \
+curl -X POST "http://192.168.103.164:8000/api/auth/login" \
      -H "Content-Type: application/json" \
      -d '{"username":"admin","password":"admin123"}'
         </pre>
