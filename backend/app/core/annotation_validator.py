@@ -32,43 +32,86 @@ class AnnotationValidator:
             
             print(f"[DEBUG] 验证器加载成功，主模型: {validator.main_model.__name__ if validator.main_model else 'None'}")
             
-            # 验证数据
-            result = validator.validate_document(annotation_data)
-            print(f"[DEBUG] 验证结果: {result}")
+            # 检测数据格式并相应处理
+            objects_to_validate = []
             
-            if result["valid"]:
-                print(f"[DEBUG] 数据验证通过")
+            if isinstance(annotation_data, list):
+                # 直接是数组格式
+                objects_to_validate = annotation_data
+                print(f"[DEBUG] 检测到数组格式，包含 {len(objects_to_validate)} 个对象")
+            elif isinstance(annotation_data, dict) and 'items' in annotation_data:
+                # 包含items字段的对象格式
+                objects_to_validate = annotation_data['items']
+                print(f"[DEBUG] 检测到包含items的对象格式，包含 {len(objects_to_validate)} 个对象")
+            else:
+                # 单个对象格式
+                objects_to_validate = [annotation_data]
+                print(f"[DEBUG] 检测到单个对象格式")
+            
+            # 逐个验证每个对象
+            all_valid = True
+            all_error_details = []
+            validated_objects = []
+            
+            for idx, obj_data in enumerate(objects_to_validate):
+                print(f"[DEBUG] 验证第 {idx + 1} 个对象: {obj_data}")
+                
+                result = validator.validate_document(obj_data)
+                print(f"[DEBUG] 第 {idx + 1} 个对象验证结果: {result}")
+                
+                if result["valid"]:
+                    validated_objects.append(result.get("validated_data", obj_data))
+                else:
+                    all_valid = False
+                    # 获取详细错误信息
+                    errors = result.get("errors", result.get("error_details", []))
+                    
+                    if isinstance(errors, list):
+                        # 为每个错误添加对象索引前缀
+                        for error in errors:
+                            error_copy = error.copy()
+                            # 在字段路径前加上对象索引
+                            original_loc = error_copy.get("loc", [])
+                            if len(objects_to_validate) > 1:
+                                error_copy["loc"] = [f"对象{idx + 1}"] + list(original_loc)
+                            all_error_details.append(error_copy)
+                    else:
+                        # 简单错误信息
+                        error_msg = str(errors) if errors else result.get("error", "未知验证错误")
+                        all_error_details.append({
+                            "loc": [f"对象{idx + 1}"] if len(objects_to_validate) > 1 else [],
+                            "msg": error_msg,
+                            "type": "validation_error",
+                            "input": obj_data
+                        })
+            
+            if all_valid:
+                print(f"[DEBUG] 所有对象验证通过")
+                
+                # 构造验证后的数据，保持原有格式
+                if isinstance(annotation_data, list):
+                    validated_data = validated_objects
+                elif isinstance(annotation_data, dict) and 'items' in annotation_data:
+                    validated_data = {**annotation_data, 'items': validated_objects}
+                else:
+                    validated_data = validated_objects[0] if validated_objects else annotation_data
+                
                 return {
                     "valid": True,
-                    "validated_data": result.get("validated_data", annotation_data),
+                    "validated_data": validated_data,
                     "message": "数据验证通过"
                 }
             else:
-                # 获取详细错误信息
-                errors = result.get("errors", result.get("error_details", []))
-                print(f"[DEBUG] 验证失败，原始错误: {errors}")
+                # 格式化验证错误信息
+                error_details = self._format_validation_errors(all_error_details)
+                print(f"[DEBUG] 格式化后的错误: {error_details}")
                 
-                if isinstance(errors, list):
-                    # 格式化验证错误信息
-                    error_details = self._format_validation_errors(errors)
-                    print(f"[DEBUG] 格式化后的错误: {error_details}")
-                    
-                    return {
-                        "valid": False,
-                        "error": "数据验证失败",
-                        "error_details": error_details,
-                        "raw_errors": errors  # 包含原始错误用于调试
-                    }
-                else:
-                    # 简单错误信息
-                    error_msg = str(errors) if errors else result.get("error", "未知验证错误")
-                    print(f"[DEBUG] 简单错误信息: {error_msg}")
-                    
-                    return {
-                        "valid": False,
-                        "error": error_msg,
-                        "error_details": [{"field": "general", "message": error_msg, "type": "validation_error"}]
-                    }
+                return {
+                    "valid": False,
+                    "error": "数据验证失败",
+                    "error_details": error_details,
+                    "raw_errors": all_error_details  # 包含原始错误用于调试
+                }
                 
         except Exception as e:
             error_msg = f"验证过程中发生异常: {str(e)}"

@@ -419,17 +419,20 @@ const AnnotationBuffer: React.FC = () => {
       // 单个对象，直接返回该对象的标注数据
       return buffer.objects[0].annotationData
     } else {
-      // 多个对象，根据原始文档结构返回
+      // 多个对象情况
       const allAnnotationData = buffer.objects.map(obj => obj.annotationData)
       
-      // 如果原始文档有items结构，保持该结构
+      // 检查原始文档结构
       if (currentDocument?.originalContent?.items) {
+        // 如果原始文档有items结构，保持该结构，但只包含标注数据部分
         return {
-          ...currentDocument.originalContent,
           items: allAnnotationData
         }
+      } else if (Array.isArray(currentDocument?.originalContent)) {
+        // 如果原始文档是数组，直接返回标注数据数组
+        return allAnnotationData
       } else {
-        // 否则返回数组
+        // 其他情况，返回数组格式
         return allAnnotationData
       }
     }
