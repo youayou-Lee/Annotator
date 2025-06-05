@@ -25,7 +25,8 @@ import {
   ExclamationCircleOutlined, 
   CheckCircleOutlined,
   EditOutlined,
-  InfoCircleOutlined
+  InfoCircleOutlined,
+  LockOutlined
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 
@@ -293,36 +294,41 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
     const hasError = validationErrors[field.path]?.length > 0
     
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span>
-          {field.path}
+          {field.description || field.path}
           {field.required && <span style={{ color: 'red' }}> *</span>}
         </span>
         
         {isModified && (
-          <Tag color="orange" icon={<EditOutlined />}>
-            已修改
-          </Tag>
+          <Tag color="orange">已修改</Tag>
         )}
         
         {hasError && (
           <Tag color="red" icon={<ExclamationCircleOutlined />}>
-            有错误
+            错误
           </Tag>
         )}
         
-        <Tooltip title={`字段描述: ${field.description}`}>
-          <InfoCircleOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />
-        </Tooltip>
+        {field.type && (
+          <Tag style={{ fontSize: '10px', marginLeft: 'auto' }}>
+            {field.type}
+          </Tag>
+        )}
         
-        {(isModified || field.originalValue !== undefined) && (
-          <Tooltip title="重置到原始值">
+        {isModified && (
+          <Tooltip title="重置为原始值">
             <Button
               type="text"
               size="small"
               icon={<ReloadOutlined />}
               onClick={() => onResetField(field.path)}
-              style={{ padding: 0, height: 16, width: 16 }}
+              style={{ 
+                padding: '0 4px', 
+                height: 'auto', 
+                minWidth: 'auto',
+                color: '#1890ff'
+              }}
             />
           </Tooltip>
         )}

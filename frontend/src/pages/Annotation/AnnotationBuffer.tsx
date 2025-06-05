@@ -15,7 +15,9 @@ import {
   Col,
   Card,
   Progress,
-  Tooltip
+  Tooltip,
+  Switch,
+  Tag
 } from 'antd'
 import {
   ArrowLeftOutlined,
@@ -27,7 +29,9 @@ import {
   EyeOutlined,
   ReloadOutlined,
   InfoCircleOutlined,
-  DownloadOutlined
+  DownloadOutlined,
+  EditOutlined,
+  LockOutlined
 } from '@ant-design/icons'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAnnotationBufferStore } from '../../stores/annotationBufferStore'
@@ -88,11 +92,13 @@ const AnnotationBuffer: React.FC = () => {
   const [annotationFields, setAnnotationFields] = useState<AnnotationField[]>([])
   const [documentBuffer, setDocumentBuffer] = useState<DocumentBuffer | null>(null)
   const [currentObjectIndex, setCurrentObjectIndex] = useState(0)
+  const [isEditMode, setIsEditMode] = useState(false)
   
   // 单个表单实例 - 在对象切换时重置数据
   const [form] = Form.useForm()
   const isInitializingRef = useRef(false)
   const fieldChangeTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({})
+  const editorUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Store hooks
   const {
@@ -315,6 +321,11 @@ const AnnotationBuffer: React.FC = () => {
         if (timeout) clearTimeout(timeout)
       })
       fieldChangeTimeoutRef.current = {}
+      
+      if (editorUpdateTimeoutRef.current) {
+        clearTimeout(editorUpdateTimeoutRef.current)
+        editorUpdateTimeoutRef.current = null
+      }
     }
   }, [])
 
@@ -411,6 +422,60 @@ const AnnotationBuffer: React.FC = () => {
       // 清除该字段的防抖定时器
       delete fieldChangeTimeoutRef.current[fieldPath]
     }, 150) // 150ms 防抖延迟
+  }
+
+  // 处理Monaco编辑器内容变化
+  const handleEditorChange = (value: string | undefined) => {
+    if (!documentBuffer || !currentObjectBuffer || isInitializingRef.current || !isEditMode) return
+    
+    // 清除之前的防抖定时器
+    if (editorUpdateTimeoutRef.current) {
+      clearTimeout(editorUpdateTimeoutRef.current)
+    }
+    
+    // 设置防抖定时器
+    editorUpdateTimeoutRef.current = setTimeout(() => {
+      try {
+        if (!value) return
+        
+        // 解析JSON
+        const newData = JSON.parse(value)
+        
+        const objectIndex = currentObjectIndex
+        const updatedBuffer = { ...documentBuffer }
+        const objectBuffer = { ...updatedBuffer.objects[objectIndex] }
+        
+        // 检查哪些字段被修改了
+        const updatedModifiedFields = new Set<string>()
+        annotationFields.forEach(field => {
+          const newValue = getNestedValue(newData, field.path)
+          const originalValue = getNestedValue(objectBuffer.originalData, field.path)
+          if (JSON.stringify(newValue) !== JSON.stringify(originalValue)) {
+            updatedModifiedFields.add(field.path)
+          }
+        })
+        
+        // 验证所有字段
+        const { isValid, errors } = validateAllFields(newData)
+        const completionPercentage = calculateCompletion(newData)
+        
+        // 更新对象缓冲区
+        objectBuffer.annotationData = newData
+        objectBuffer.validationErrors = errors
+        objectBuffer.modifiedFields = updatedModifiedFields
+        objectBuffer.isValid = isValid
+        objectBuffer.completionPercentage = completionPercentage
+        
+        updatedBuffer.objects[objectIndex] = objectBuffer
+        setDocumentBuffer(updatedBuffer)
+        
+      } catch (error) {
+        console.warn('编辑器内容格式错误，无法解析JSON:', error)
+        // JSON格式错误时不更新数据，但也不阻止用户继续编辑
+      }
+      
+      editorUpdateTimeoutRef.current = null
+    }, 500) // 500ms 防抖延迟，比表单更长一些
   }
 
   // 构造完整的标注数据
@@ -1044,6 +1109,22 @@ const AnnotationBuffer: React.FC = () => {
                 {/* 保存和导出按钮 */}
                 <div style={{ marginLeft: '20px', borderLeft: '1px solid #f0f0f0', paddingLeft: '20px' }}>
                   <Space>
+                    {/* 编辑模式切换 */}
+                    <Tooltip title={isEditMode ? "切换到只读模式，文档内容不可编辑" : "切换到编辑模式，可直接编辑文档内容"}>
+                      <Button
+                        icon={isEditMode ? <LockOutlined /> : <EditOutlined />}
+                        type={isEditMode ? "default" : "primary"}
+                        onClick={() => setIsEditMode(!isEditMode)}
+                        style={{
+                          background: isEditMode ? '#52c41a' : undefined,
+                          borderColor: isEditMode ? '#52c41a' : undefined,
+                          color: isEditMode ? '#fff' : undefined
+                        }}
+                      >
+                        {isEditMode ? '切换只读' : '开启编辑'}
+                      </Button>
+                    </Tooltip>
+                    
                     <Tooltip title="立即保存到后端">
                       <Button
                         type={isDirty ? "primary" : "default"}
@@ -1082,6 +1163,15 @@ const AnnotationBuffer: React.FC = () => {
               <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography.Title level={5} style={{ margin: 0 }}>
                   <EyeOutlined /> 当前对象内容
+                  {isEditMode ? (
+                    <Tag color="green" style={{ marginLeft: 8 }}>
+                      可编辑
+                    </Tag>
+                  ) : (
+                    <Tag color="blue" style={{ marginLeft: 8 }}>
+                      只读查看
+                    </Tag>
+                  )}
                 </Typography.Title>
                 <Space>
                   <Tooltip title="显示标注字段路径">
@@ -1122,8 +1212,9 @@ const AnnotationBuffer: React.FC = () => {
                   height="100%"
                   language="json"
                   value={JSON.stringify(currentObjectBuffer?.annotationData || {}, null, 2)}
+                  onChange={handleEditorChange}
                   options={{
-                    readOnly: true,
+                    readOnly: !isEditMode,
                     minimap: { enabled: false },
                     scrollBeyondLastLine: false,
                     fontSize: 13,
@@ -1131,7 +1222,9 @@ const AnnotationBuffer: React.FC = () => {
                     folding: true,
                     wordWrap: 'on',
                     automaticLayout: true,
-                    theme: 'vs-light'
+                    theme: 'vs-light',
+                    formatOnType: true,
+                    formatOnPaste: true
                   }}
                 />
               </div>
