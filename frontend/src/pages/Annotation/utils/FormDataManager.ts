@@ -9,39 +9,137 @@ import { TemplateField } from '../components/DynamicFormGenerator'
 export const getNestedValue = (obj: any, path: string): any => {
   if (!obj || !path) return undefined
   
-  const keys = path.split('.')
   let current = obj
   
-  for (const key of keys) {
-    if (current === null || current === undefined) {
-      return undefined
-    }
-    current = current[key]
+  // 特殊处理：如果文档结构是 {items: [...], type: 'array'}，则从items[0]开始
+  if (obj.items && Array.isArray(obj.items) && obj.items.length > 0 && obj.type === 'array') {
+    current = obj.items[0]
   }
   
-  return current
+  // 处理包含数组索引的路径 如: 相似罪名[].罪名
+  if (path.includes('[]')) {
+    const parts = path.split('[]')
+    let arrayPath = parts[0] // 相似罪名
+    let remainingPath = parts[1] // .罪名
+    
+    // 获取到数组
+    const arrayKeys = arrayPath.split('.')
+    for (const key of arrayKeys) {
+      if (current && typeof current === 'object' && key in current) {
+        current = current[key]
+      } else {
+        return undefined
+      }
+    }
+    
+    // 如果是数组，取第一个元素
+    if (Array.isArray(current) && current.length > 0) {
+      current = current[0]
+      
+      // 处理剩余路径（去掉开头的点号）
+      if (remainingPath && remainingPath.startsWith('.')) {
+        remainingPath = remainingPath.substring(1)
+      }
+      
+      if (remainingPath) {
+        // 递归处理剩余路径（可能还有嵌套数组）
+        return getNestedValue(current, remainingPath)
+      } else {
+        return current
+      }
+    } else {
+      return undefined
+    }
+  } else {
+    // 普通路径处理
+    const keys = path.split('.')
+    
+    for (const key of keys) {
+      if (current === null || current === undefined) {
+        return undefined
+      }
+      current = current[key]
+    }
+    
+    return current
+  }
 }
 
 // 辅助函数：设置嵌套对象的值
 export const setNestedValue = (obj: any, path: string, value: any): any => {
   if (!path) return obj
   
-  const keys = path.split('.')
+  // 深拷贝对象
   const result = { ...obj }
-  let current = result
   
-  for (let i = 0; i < keys.length - 1; i++) {
-    const key = keys[i]
-    if (current[key] === undefined || current[key] === null) {
-      current[key] = {}
-    } else {
-      current[key] = { ...current[key] }
+  // 处理包含数组索引的路径 如: 相似罪名[].罪名
+  if (path.includes('[]')) {
+    const parts = path.split('[]')
+    let arrayPath = parts[0] // 相似罪名
+    let remainingPath = parts[1] // .罪名
+    
+    // 获取到数组的父对象
+    const arrayKeys = arrayPath.split('.')
+    let arrayParent = result
+    
+    // 导航到数组所在的父对象
+    for (let i = 0; i < arrayKeys.length - 1; i++) {
+      const key = arrayKeys[i]
+      if (!arrayParent[key] || typeof arrayParent[key] !== 'object') {
+        arrayParent[key] = {}
+      } else {
+        arrayParent[key] = { ...arrayParent[key] }
+      }
+      arrayParent = arrayParent[key]
     }
-    current = current[key]
+    
+    // 获取数组字段的键
+    const arrayKey = arrayKeys[arrayKeys.length - 1]
+    
+    // 确保数组存在
+    if (!Array.isArray(arrayParent[arrayKey])) {
+      arrayParent[arrayKey] = []
+    } else {
+      arrayParent[arrayKey] = [...arrayParent[arrayKey]]
+    }
+    
+    // 如果数组为空，创建第一个元素
+    if (arrayParent[arrayKey].length === 0) {
+      arrayParent[arrayKey].push({})
+    }
+    
+    // 处理剩余路径（去掉开头的点号）
+    if (remainingPath && remainingPath.startsWith('.')) {
+      remainingPath = remainingPath.substring(1)
+    }
+    
+    if (remainingPath) {
+      // 递归处理剩余路径，更新数组中第一个元素
+      arrayParent[arrayKey][0] = setNestedValue(arrayParent[arrayKey][0], remainingPath, value)
+    } else {
+      // 如果没有剩余路径，直接设置整个数组元素
+      arrayParent[arrayKey][0] = value
+    }
+    
+    return result
+  } else {
+    // 普通路径处理
+    const keys = path.split('.')
+    let current = result
+    
+    for (let i = 0; i < keys.length - 1; i++) {
+      const key = keys[i]
+      if (current[key] === undefined || current[key] === null) {
+        current[key] = {}
+      } else {
+        current[key] = { ...current[key] }
+      }
+      current = current[key]
+    }
+    
+    current[keys[keys.length - 1]] = value
+    return result
   }
-  
-  current[keys[keys.length - 1]] = value
-  return result
 }
 
 // 辅助函数：删除嵌套对象的值

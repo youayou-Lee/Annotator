@@ -40,6 +40,22 @@ import { annotationAPI } from '../../services/api'
 import AnnotationFormRenderer from './components/AnnotationFormRenderer'
 import MonacoEditor from '@monaco-editor/react'
 
+// 调试日志工具
+const DEBUG = {
+  FIELD_UPDATE: true,    // 字段更新
+  STATE_SYNC: true,      // 状态同步
+  VALIDATION: true,      // 验证逻辑
+  FIELD_MAPPING: true,   // 字段映射
+  SAVE_PROCESS: true     // 保存过程
+}
+
+const debugLog = (category: keyof typeof DEBUG, message: string, data?: any) => {
+  if (DEBUG[category]) {
+    const timestamp = new Date().toLocaleTimeString()
+    console.log(`[${timestamp}] [${category}] ${message}`, data || '')
+  }
+}
+
 const { Text } = Typography
 const { Sider, Content } = Layout
 
@@ -134,6 +150,11 @@ const AnnotationBuffer: React.FC = () => {
   const parseAnnotationFields = useMemo(() => {
     if (!template?.fields) return []
     
+    debugLog('FIELD_MAPPING', '开始解析标注字段', { 
+      templateFieldsCount: template.fields.length,
+      template: template.fields 
+    })
+    
     const fields: AnnotationField[] = []
     
     template.fields.forEach((field: any) => {
@@ -152,7 +173,19 @@ const AnnotationBuffer: React.FC = () => {
           defaultValue: field.default_value,
           originalValue: undefined // 将在初始化buffer时设置
         })
+        
+        debugLog('FIELD_MAPPING', '添加标注字段', {
+          path: field.path,
+          type: field.field_type,
+          required: field.required,
+          description: field.description
+        })
       }
+    })
+    
+    debugLog('FIELD_MAPPING', '字段解析完成', { 
+      annotationFieldsCount: fields.length,
+      fields: fields.map(f => ({ path: f.path, type: f.type, required: f.required }))
     })
     
     return fields
@@ -162,16 +195,58 @@ const AnnotationBuffer: React.FC = () => {
   const getNestedValue = (obj: any, path: string): any => {
     if (!obj || !path) return undefined
     
-    const keys = path.split('.')
+    // 特殊处理：如果文档结构是 {items: [...], type: 'array'}，则从items[0]开始
     let current = obj
-    for (const key of keys) {
-      if (current && typeof current === 'object' && key in current) {
-        current = current[key]
+    if (obj.items && Array.isArray(obj.items) && obj.items.length > 0 && obj.type === 'array') {
+      current = obj.items[0]
+    }
+    
+    // 处理包含数组索引的路径 如: 相似罪名[].罪名
+    if (path.includes('[]')) {
+      const parts = path.split('[]')
+      let arrayPath = parts[0] // 相似罪名
+      let remainingPath = parts[1] // .罪名
+      
+      // 获取到数组
+      const arrayKeys = arrayPath.split('.')
+      for (const key of arrayKeys) {
+        if (current && typeof current === 'object' && key in current) {
+          current = current[key]
+        } else {
+          return undefined
+        }
+      }
+      
+      // 如果是数组，取第一个元素
+      if (Array.isArray(current) && current.length > 0) {
+        current = current[0]
+        
+        // 处理剩余路径（去掉开头的点号）
+        if (remainingPath && remainingPath.startsWith('.')) {
+          remainingPath = remainingPath.substring(1)
+        }
+        
+        if (remainingPath) {
+          // 递归处理剩余路径（可能还有嵌套数组）
+          return getNestedValue(current, remainingPath)
+        } else {
+          return current
+        }
       } else {
         return undefined
       }
+    } else {
+      // 普通路径处理
+      const keys = path.split('.')
+      for (const key of keys) {
+        if (current && typeof current === 'object' && key in current) {
+          current = current[key]
+        } else {
+          return undefined
+        }
+      }
+      return current
     }
-    return current
   }
 
   // 在嵌套对象中设置值
@@ -180,21 +255,71 @@ const AnnotationBuffer: React.FC = () => {
     
     // 深拷贝对象
     const result = JSON.parse(JSON.stringify(obj))
-    const keys = path.split('.')
-    let current = result
     
-    // 创建嵌套结构
-    for (let i = 0; i < keys.length - 1; i++) {
-      const key = keys[i]
-      if (!current[key] || typeof current[key] !== 'object') {
-        current[key] = {}
+    // 处理包含数组索引的路径 如: 相似罪名[].不构成原因
+    if (path.includes('[]')) {
+      const parts = path.split('[]')
+      let arrayPath = parts[0] // 相似罪名
+      let remainingPath = parts[1] // .不构成原因
+      
+      // 导航到数组所在的位置
+      const arrayKeys = arrayPath.split('.')
+      let current = result
+      
+      // 导航到数组的父对象
+      for (let i = 0; i < arrayKeys.length - 1; i++) {
+        const key = arrayKeys[i]
+        if (!current[key] || typeof current[key] !== 'object') {
+          current[key] = {}
+        }
+        current = current[key]
       }
-      current = current[key]
+      
+      // 获取数组字段名
+      const arrayKey = arrayKeys[arrayKeys.length - 1]
+      
+      // 确保数组存在
+      if (!Array.isArray(current[arrayKey])) {
+        current[arrayKey] = []
+      }
+      
+      // 如果数组为空，创建第一个元素
+      if (current[arrayKey].length === 0) {
+        current[arrayKey].push({})
+      }
+      
+      // 处理剩余路径（去掉开头的点号）
+      if (remainingPath && remainingPath.startsWith('.')) {
+        remainingPath = remainingPath.substring(1)
+      }
+      
+      if (remainingPath) {
+        // 递归处理剩余路径，更新数组中第一个元素
+        current[arrayKey][0] = setNestedValue(current[arrayKey][0], remainingPath, value)
+      } else {
+        // 如果没有剩余路径，直接设置整个数组元素
+        current[arrayKey][0] = value
+      }
+      
+      return result
+    } else {
+      // 普通路径处理
+      const keys = path.split('.')
+      let current = result
+      
+      // 创建嵌套结构
+      for (let i = 0; i < keys.length - 1; i++) {
+        const key = keys[i]
+        if (!current[key] || typeof current[key] !== 'object') {
+          current[key] = {}
+        }
+        current = current[key]
+      }
+      
+      // 设置最终值
+      current[keys[keys.length - 1]] = value
+      return result
     }
-    
-    // 设置最终值
-    current[keys[keys.length - 1]] = value
-    return result
   }
 
   // 检测文档是否包含多个JSON对象
@@ -220,6 +345,14 @@ const AnnotationBuffer: React.FC = () => {
   // 初始化文档缓冲区
   const initializeDocumentBuffer = useMemo(() => {
     if (!currentDocument || !parseAnnotationFields.length || !parseDocumentObjects.length) return null
+
+    debugLog('FIELD_MAPPING', '初始化文档缓冲区', {
+      documentId: currentDocument.id,
+      annotationFieldsCount: parseAnnotationFields.length,
+      objectsCount: parseDocumentObjects.length,
+      firstObjectKeys: Object.keys(parseDocumentObjects[0] || {}),
+      annotationFieldPaths: parseAnnotationFields.map(f => f.path)
+    })
 
     const objectBuffers: ObjectBuffer[] = parseDocumentObjects.map((objData: any, index: number) => {
       // 为标注字段设置原始值
@@ -280,7 +413,7 @@ const AnnotationBuffer: React.FC = () => {
       currentObjectIndex: 0,
       objects: objectBuffers
     }
-  }, [currentDocument, parseAnnotationFields, parseDocumentObjects])
+  }, [currentDocument?.id, currentDocument?.originalContent, parseAnnotationFields, parseDocumentObjects])
 
   // 更新文档缓冲区
   useEffect(() => {
@@ -368,6 +501,15 @@ const AnnotationBuffer: React.FC = () => {
   const handleFieldChange = (fieldPath: string, value: any) => {
     if (!documentBuffer || !currentObjectBuffer || isInitializingRef.current) return
     
+    debugLog('FIELD_UPDATE', '字段变更开始', { 
+      fieldPath, 
+      value, 
+      currentValue: getNestedValue(currentObjectBuffer.annotationData, fieldPath),
+      isInitializing: isInitializingRef.current,
+      testArrayPath: fieldPath.includes('[]'),
+      originalDataStructure: Object.keys(currentObjectBuffer.annotationData)
+    })
+    
     // 清除之前的防抖定时器
     if (fieldChangeTimeoutRef.current[fieldPath]) {
       clearTimeout(fieldChangeTimeoutRef.current[fieldPath])
@@ -382,9 +524,35 @@ const AnnotationBuffer: React.FC = () => {
       // 更新标注数据
       const updatedAnnotationData = setNestedValue(objectBuffer.annotationData, fieldPath, value)
       
+      // 测试验证setNestedValue是否正常工作
+      const testGetValue = getNestedValue(updatedAnnotationData, fieldPath)
+      debugLog('FIELD_UPDATE', 'setNestedValue测试', {
+        fieldPath,
+        inputValue: value,
+        setNestedValueOutput: testGetValue,
+        isEqual: testGetValue === value,
+        originalData: objectBuffer.annotationData,
+        updatedData: updatedAnnotationData
+      })
+      
+      debugLog('FIELD_UPDATE', '数据更新完成', {
+        fieldPath,
+        oldValue: getNestedValue(objectBuffer.annotationData, fieldPath),
+        newValue: getNestedValue(updatedAnnotationData, fieldPath),
+        fullData: updatedAnnotationData,
+        setNestedValueResult: JSON.stringify(updatedAnnotationData) !== JSON.stringify(objectBuffer.annotationData)
+      })
+      
       // 验证字段
       const field = annotationFields.find(f => f.path === fieldPath)
       const fieldErrors = field ? validateField(field, value) : []
+      
+      debugLog('VALIDATION', '字段验证结果', {
+        fieldPath,
+        value,
+        errors: fieldErrors,
+        isRequired: field?.required
+      })
       
       // 更新验证错误
       const updatedErrors = { ...objectBuffer.validationErrors }
@@ -417,11 +585,19 @@ const AnnotationBuffer: React.FC = () => {
       updatedBuffer.objects[objectIndex] = objectBuffer
       setDocumentBuffer(updatedBuffer)
       
+      debugLog('STATE_SYNC', '缓冲区状态更新', {
+        objectIndex,
+        modifiedFieldsCount: objectBuffer.modifiedFields.size,
+        validationErrorsCount: Object.keys(objectBuffer.validationErrors).length,
+        completionPercentage: objectBuffer.completionPercentage,
+        isValid: objectBuffer.isValid
+      })
+      
       // 只更新本地状态，不调用 updateAnnotation 进行自动保存
       
       // 清除该字段的防抖定时器
       delete fieldChangeTimeoutRef.current[fieldPath]
-    }, 150) // 150ms 防抖延迟
+    }, 50) // 50ms 防抖延迟，更快响应用户输入
   }
 
   // 处理Monaco编辑器内容变化
@@ -560,18 +736,64 @@ const AnnotationBuffer: React.FC = () => {
   const handleSave = async () => {
     if (!documentBuffer) return
     
+    debugLog('SAVE_PROCESS', '开始保存流程', {
+      isDirty,
+      modifiedObjects: documentBuffer.objects.filter(obj => obj.modifiedFields.size > 0).length
+    })
+    
+    // 等待所有防抖更新完成
+    const pendingTimeouts = Object.values(fieldChangeTimeoutRef.current).filter(timeout => timeout)
+    if (pendingTimeouts.length > 0) {
+      debugLog('SAVE_PROCESS', '等待防抖更新完成', { pendingCount: pendingTimeouts.length })
+      
+      // 等待所有防抖定时器自然完成
+      await new Promise(resolve => {
+        const checkInterval = setInterval(() => {
+          const stillPending = Object.values(fieldChangeTimeoutRef.current).filter(timeout => timeout)
+          if (stillPending.length === 0) {
+            clearInterval(checkInterval)
+            resolve(void 0)
+          }
+        }, 10)
+        
+        // 设置最大等待时间为200ms
+        setTimeout(() => {
+          clearInterval(checkInterval)
+          resolve(void 0)
+        }, 200)
+      })
+    }
+    
     try {
       const completeAnnotationData = constructCompleteAnnotationData(documentBuffer)
+      
+      debugLog('SAVE_PROCESS', '构造保存数据', {
+        originalData: currentDocument?.annotatedContent,
+        newData: completeAnnotationData
+      })
       
       const saveData = {
         annotation_data: completeAnnotationData
       }
       
+      debugLog('SAVE_PROCESS', '调用保存API', { saveData })
+      
       const result = await annotationAPI.saveAnnotation(taskId!, documentId!, saveData)
+      
+      debugLog('SAVE_PROCESS', 'API响应结果', { 
+        success: result.success, 
+        message: result.message,
+        detail: result.detail 
+      })
       
       if (result.success) {
         // 更新store中的标注数据
         updateAnnotation(documentBuffer.documentId, completeAnnotationData)
+        
+        debugLog('STATE_SYNC', '保存成功，更新状态', {
+          documentId: documentBuffer.documentId,
+          annotationData: completeAnnotationData
+        })
         
         // 如果保存成功，清除所有校验错误和修改标记
         const updatedBuffer = { ...documentBuffer }
@@ -581,6 +803,8 @@ const AnnotationBuffer: React.FC = () => {
           obj.isValid = true // 后端验证通过，标记为有效
         })
         setDocumentBuffer(updatedBuffer)
+        
+        debugLog('STATE_SYNC', '清除修改标记和验证错误')
         
         message.success('保存成功')
       } else {
