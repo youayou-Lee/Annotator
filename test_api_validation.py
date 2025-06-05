@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-测试当前问题：前端错误显示
+测试API文档校验功能
 """
 
 import requests
 import json
 import time
 
-def test_error_display():
-    """测试前端错误显示功能"""
-    print("=== 测试前端错误显示功能 ===\n")
+def test_api_validation():
+    """测试API文档校验功能"""
+    print("=== API文档校验功能测试 ===\n")
     
     # API基础URL
     base_url = "http://localhost:8000"
@@ -50,8 +50,28 @@ def test_error_display():
         print(f"❌ 登录请求失败: {e}")
         return False
     
+    # 测试创建任务（使用有效文档）
+    print("\n3. 测试创建任务（有效文档）...")
+    valid_task_data = {
+        "name": "测试任务-有效文档",
+        "description": "测试文档校验功能",
+        "documents": ["public_files\\documents\\20250605_123812_test_template.json"],
+        "template_path": "public_files\\templates\\20250605_122824_test_template.py"
+    }
+    
+    try:
+        response = requests.post(f"{base_url}/api/tasks/", json=valid_task_data, headers=headers)
+        if response.status_code == 200:
+            print("✅ 有效文档任务创建成功")
+            task_id = response.json()["id"]
+            print(f"   任务ID: {task_id}")
+        else:
+            print(f"❌ 有效文档任务创建失败: {response.text}")
+    except Exception as e:
+        print(f"❌ 有效文档任务创建请求失败: {e}")
+    
     # 测试创建任务（使用无效文档）
-    print("\n3. 测试创建任务（无效文档）以验证错误信息...")
+    print("\n4. 测试创建任务（无效文档）...")
     invalid_task_data = {
         "name": "测试任务-无效文档",
         "description": "测试文档校验功能",
@@ -61,42 +81,19 @@ def test_error_display():
     
     try:
         response = requests.post(f"{base_url}/api/tasks/", json=invalid_task_data, headers=headers)
-        print(f"响应状态码: {response.status_code}")
-        print(f"响应内容: {response.text}")
-        
         if response.status_code == 400:
-            error_data = response.json()
-            error_detail = error_data.get("detail", "")
-            print(f"\n✅ 成功获取到错误信息:")
-            print(f"错误详情: {error_detail}")
-            
-            # 检查错误信息格式
-            if "文档数据校验失败" in error_detail:
-                print("✅ 错误信息包含校验失败标识")
-                if "字段" in error_detail and "条记录" in error_detail:
-                    print("✅ 错误信息包含详细的字段和记录信息")
-                    print("\n📝 前端应该能够正确显示这个错误信息")
-                else:
-                    print("❌ 错误信息缺少详细信息")
-            else:
-                print("❌ 错误信息不包含校验失败标识")
+            error_detail = response.json()["detail"]
+            print("✅ 无效文档任务创建被正确拒绝")
+            print("   错误信息:")
+            print(f"   {error_detail}")
         else:
-            print(f"❌ 期望状态码400，实际收到: {response.status_code}")
-            
+            print(f"❌ 无效文档任务应该被拒绝但创建成功了: {response.text}")
     except Exception as e:
-        print(f"❌ 请求失败: {e}")
+        print(f"❌ 无效文档任务创建请求失败: {e}")
     
-    print(f"\n4. 前端测试建议:")
-    print(f"   1. 打开浏览器访问 http://localhost:3000")
-    print(f"   2. 登录系统 (admin/admin123)")
-    print(f"   3. 进入任务列表页面")
-    print(f"   4. 点击'创建任务'按钮")
-    print(f"   5. 选择 test_invalid_data.json 文档文件")
-    print(f"   6. 选择 test_template.py 模板文件")
-    print(f"   7. 填写任务信息后点击确定")
-    print(f"   8. 观察是否显示详细的校验错误信息")
-    
+    print("\n🎉 API文档校验功能测试完成！")
     return True
 
 if __name__ == "__main__":
-    test_error_display() 
+    test_api_validation()
+ 

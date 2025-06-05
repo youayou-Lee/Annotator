@@ -13,9 +13,17 @@ import {
   Space,
   Tag,
   Row,
-  Col
+  Col,
+  Checkbox,
+  Button,
+  Alert
 } from 'antd'
-import { FileTextOutlined, CodeOutlined, UserOutlined } from '@ant-design/icons'
+import { 
+  FileTextOutlined, 
+  CodeOutlined, 
+  UserOutlined,
+  CheckCircleOutlined 
+} from '@ant-design/icons'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { taskAPI, fileAPI, userAPI } from '../../../services/api'
 import { useAuthStore } from '../../../stores/authStore'
@@ -40,6 +48,7 @@ const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
   const { user, hasPermission } = useAuthStore()
   const [selectedDocuments, setSelectedDocuments] = useState<string[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  const [validationError, setValidationError] = useState<string>('')
   const { message } = App.useApp()
 
   // 获取文档文件
@@ -75,16 +84,32 @@ const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
       form.resetFields()
       setSelectedDocuments([])
       setSelectedTemplate('')
+      setValidationError('')
       onSuccess()
     },
     onError: (error: any) => {
-      message.error(error.message || '创建任务失败')
+      console.log('创建任务错误:', error)
+      
+      // 从Error对象中获取错误信息
+      const errorMessage = error.message || '创建任务失败'
+      
+      console.log('错误信息:', errorMessage)
+      
+      // 检查是否是文档校验错误
+      if (errorMessage.includes('文档数据校验失败')) {
+        setValidationError(errorMessage)
+      } else {
+        message.error(errorMessage)
+      }
     }
   })
 
   // 处理表单提交
   const handleSubmit = async () => {
     try {
+      // 清除之前的错误信息
+      setValidationError('')
+      
       const values = await form.validateFields()
       
       if (selectedDocuments.length === 0) {
@@ -135,6 +160,7 @@ const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
     form.resetFields()
     setSelectedDocuments([])
     setSelectedTemplate('')
+    setValidationError('')
     onCancel()
   }
 
@@ -159,6 +185,23 @@ const TaskCreateModal: React.FC<TaskCreateModalProps> = ({
       width={800}
       destroyOnClose
     >
+      {/* 显示文档校验错误 */}
+      {validationError && (
+        <Alert
+          message="文档数据校验失败"
+          description={
+            <div style={{ whiteSpace: 'pre-line', maxHeight: 300, overflowY: 'auto' }}>
+              {validationError}
+            </div>
+          }
+          type="error"
+          showIcon
+          closable
+          onClose={() => setValidationError('')}
+          style={{ marginBottom: 16 }}
+        />
+      )}
+      
       <Form
         form={form}
         layout="vertical"

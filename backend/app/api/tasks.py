@@ -9,6 +9,7 @@ from ..models.task import (
 from ..models.file import FileType
 from ..core.security import get_current_user
 from ..core.storage import StorageManager
+from ..core.simple_document_validator import SimpleDocumentValidator
 
 router = APIRouter()
 storage = StorageManager()
@@ -92,6 +93,85 @@ async def create_task(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"模板文件格式错误: {validation_result.get('error', '未知错误')}"
+            )
+        
+        # 使用模板校验文档数据
+        try:
+            # 获取模板文件的完整路径
+            template_full_path = storage.data_dir / task_create.template_path
+            
+            # 创建文档验证器
+            validator = SimpleDocumentValidator(str(template_full_path))
+            
+            # 校验每个文档文件
+            document_validation_errors = []
+            for doc_path in task_create.documents:
+                doc_full_path = storage.data_dir / doc_path
+                
+                if doc_full_path.exists():
+                    # 验证文档文件
+                    validation_result = validator.validate_file(str(doc_full_path))
+                    
+                    if validation_result.get("invalid_count", 0) > 0:
+                        # 收集详细的验证错误信息
+                        doc_errors = {
+                            "file_path": doc_path,
+                            "total_documents": validation_result.get("total", 0),
+                            "invalid_count": validation_result.get("invalid_count", 0),
+                            "errors": []
+                        }
+                        
+                        # 提取具体的错误信息
+                        for result in validation_result.get("results", []):
+                            if not result.get("valid"):
+                                error_info = {
+                                    "index": result.get("index", result.get("line_number", 0)),
+                                    "message": result.get("error", "未知错误")
+                                }
+                                
+                                # 如果有详细的字段错误信息
+                                if "error_details" in result:
+                                    error_info["field_errors"] = []
+                                    for field_error in result["error_details"]:
+                                        error_info["field_errors"].append({
+                                            "field": ".".join(str(loc) for loc in field_error.get("loc", [])),
+                                            "message": field_error.get("msg", ""),
+                                            "type": field_error.get("type", "")
+                                        })
+                                
+                                doc_errors["errors"].append(error_info)
+                        
+                        document_validation_errors.append(doc_errors)
+            
+            # 如果有校验错误，返回详细错误信息
+            if document_validation_errors:
+                error_message = "文档数据校验失败，请检查以下文件："
+                for doc_error in document_validation_errors:
+                    error_message += f"\n\n文件: {doc_error['file_path']}"
+                    error_message += f"\n总计: {doc_error['total_documents']} 条记录，其中 {doc_error['invalid_count']} 条有错误"
+                    
+                    for error in doc_error['errors'][:3]:  # 只显示前3个错误
+                        error_message += f"\n  - 第 {error['index'] + 1} 条记录: {error['message']}"
+                        if 'field_errors' in error:
+                            for field_error in error['field_errors'][:2]:  # 只显示前2个字段错误
+                                error_message += f"\n    字段 '{field_error['field']}': {field_error['message']}"
+                    
+                    if len(doc_error['errors']) > 3:
+                        error_message += f"\n  ... 还有 {len(doc_error['errors']) - 3} 个错误"
+                
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=error_message
+                )
+                
+        except HTTPException:
+            # 重新抛出HTTPException
+            raise
+        except Exception as e:
+            # 处理其他异常
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"文档数据校验时发生错误: {str(e)}"
             )
     
     # 检查权限

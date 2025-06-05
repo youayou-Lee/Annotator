@@ -289,10 +289,9 @@ export const taskAPI = {
         data: response.data
       }
     } catch (error: any) {
-      return {
-        success: false,
-        message: error.response?.data?.detail || '创建任务失败'
-      }
+      // 抛出错误而不是返回错误对象，这样React Query的useMutation可以正确捕获
+      const errorMessage = error.response?.data?.detail || '创建任务失败'
+      throw new Error(errorMessage)
     }
   },
     
