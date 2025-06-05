@@ -453,6 +453,41 @@ const AnnotationBuffer: React.FC = () => {
     return documentBuffer?.objects.some(obj => obj.modifiedFields.size > 0) || false
   }, [documentBuffer])
 
+  // 获取提交按钮的文本和提示
+  const getSubmitButtonInfo = useMemo(() => {
+    if (!documentBuffer) {
+      return {
+        text: '完成并提交',
+        tooltip: '正在加载...',
+        disabled: true
+      }
+    }
+    
+    const invalidObjects = documentBuffer.objects.filter(obj => !obj.isValid)
+    
+    if (invalidObjects.length > 0) {
+      return {
+        text: '存在校验错误',
+        tooltip: `第 ${invalidObjects.map(obj => obj.index + 1).join(', ')} 个对象存在校验错误，请修正后再提交`,
+        disabled: true
+      }
+    }
+    
+    if (isDirty) {
+      return {
+        text: '保存并提交',
+        tooltip: '检测到未保存的修改，点击将先进行数据校验，通过后自动提交',
+        disabled: false
+      }
+    }
+    
+    return {
+      text: '完成并提交',
+      tooltip: '所有数据已保存且通过校验，可以提交',
+      disabled: false
+    }
+  }, [documentBuffer, isDirty])
+
   // 保存数据到后端
   const handleSave = async () => {
     if (!documentBuffer) return
@@ -633,15 +668,97 @@ const AnnotationBuffer: React.FC = () => {
     if (!documentBuffer) return
     
     try {
-      // 验证所有对象
+      // 先进行前端基础校验
       const invalidObjects = documentBuffer.objects.filter(obj => !obj.isValid)
       if (invalidObjects.length > 0) {
         message.error(`第 ${invalidObjects.map(obj => obj.index + 1).join(', ')} 个对象存在验证错误，请修正后再提交`)
         return
       }
 
-      // 先保存，再提交
-      await handleSave()
+      // 如果有未保存的修改，必须先保存并通过后端校验
+      if (isDirty) {
+        message.info('检测到未保存的修改，正在进行数据校验...')
+        
+        // 先保存，这会触发后端校验
+        const completeAnnotationData = constructCompleteAnnotationData(documentBuffer)
+        
+        const saveData = {
+          annotation_data: completeAnnotationData
+        }
+        
+        const saveResult = await annotationAPI.saveAnnotation(taskId!, documentId!, saveData)
+        
+        if (!saveResult.success) {
+          // 保存失败，说明有校验错误，阻止提交
+          message.error('数据校验失败，请修正错误后再提交')
+          
+          // 处理校验错误显示（复用现有逻辑）
+          let validationErrors: Record<string, any> | null = null
+          
+          if (saveResult.detail && saveResult.detail.error_details) {
+            validationErrors = {}
+            const errorDetails = saveResult.detail.error_details || []
+            
+            errorDetails.forEach((errorItem: any) => {
+              const field = errorItem.field || 'unknown'
+              const message = errorItem.message || errorItem.original_message || errorItem.type || '校验失败'
+              
+              if (!validationErrors![field]) {
+                validationErrors![field] = []
+              }
+              
+              let displayMessage = message
+              if (errorItem.input !== undefined && errorItem.input !== null) {
+                displayMessage += ` (当前输入: ${errorItem.input})`
+              }
+              
+              validationErrors![field].push(displayMessage)
+            })
+            
+            // 更新缓冲区的校验错误状态
+            const updatedBuffer = { ...documentBuffer }
+            
+            // 清除所有对象的现有校验错误
+            updatedBuffer.objects.forEach(obj => {
+              obj.validationErrors = {}
+              obj.isValid = true
+            })
+            
+            // 应用后端校验错误
+            Object.entries(validationErrors).forEach(([path, errors]) => {
+              const errorArray = Array.isArray(errors) ? errors : [errors]
+              
+              if (updatedBuffer.objectsCount === 1) {
+                updatedBuffer.objects[0].validationErrors[path] = errorArray
+                updatedBuffer.objects[0].isValid = false
+              } else {
+                updatedBuffer.objects.forEach(obj => {
+                  obj.validationErrors[path] = errorArray
+                  obj.isValid = false
+                })
+              }
+            })
+            
+            setDocumentBuffer(updatedBuffer)
+          }
+          
+          return // 阻止提交
+        }
+        
+        // 保存成功，更新本地状态
+        updateAnnotation(documentBuffer.documentId, completeAnnotationData)
+        
+        // 清除修改标记
+        const updatedBuffer = { ...documentBuffer }
+        updatedBuffer.objects.forEach(obj => {
+          obj.modifiedFields.clear()
+          obj.validationErrors = {}
+          obj.isValid = true
+        })
+        setDocumentBuffer(updatedBuffer)
+        
+        message.success('数据校验通过，正在提交...')
+      }
       
       // 调用提交API
       const submitData = {
@@ -1171,15 +1288,17 @@ const AnnotationBuffer: React.FC = () => {
                   >
                     保存所有对象
                   </Button>
-                  <Button
-                    type="primary"
-                    icon={<CheckOutlined />}
-                    onClick={handleSubmit}
-                    loading={isLoading}
-                    disabled={documentBuffer.objects.some(obj => !obj.isValid)}
-                  >
-                    完成并提交
-                  </Button>
+                  <Tooltip title={getSubmitButtonInfo.tooltip}>
+                    <Button
+                      type="primary"
+                      icon={<CheckOutlined />}
+                      onClick={handleSubmit}
+                      loading={isLoading}
+                      disabled={getSubmitButtonInfo.disabled}
+                    >
+                      {getSubmitButtonInfo.text}
+                    </Button>
+                  </Tooltip>
                 </Space>
               </div>
             </Card>
