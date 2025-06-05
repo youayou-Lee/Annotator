@@ -1,0 +1,78 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# 后端开发指南
+
+## 项目结构
+后端使用 FastAPI + Pydantic 构建，位于 [backend/](mdc:backend) 目录。
+
+### 核心目录
+- [backend/app/](mdc:backend/app) - 主应用目录
+- [backend/app/main.py](mdc:backend/app/main.py) - FastAPI应用入口
+- [backend/app/config.py](mdc:backend/app/config.py) - 应用配置
+- [backend/app/api/](mdc:backend/app/api) - API路由模块
+- [backend/app/core/](mdc:backend/app/core) - 核心功能模块
+- [backend/app/models/](mdc:backend/app/models) - 数据模型
+- [backend/app/schemas/](mdc:backend/app/schemas) - Pydantic模式
+
+### 数据存储
+- [data/](mdc:data) - 主数据目录
+- [data/users/](mdc:data/users) - 用户数据
+- [data/tasks/](mdc:data/tasks) - 任务数据
+- [data/public_files/](mdc:data/public_files) - 公共文件库
+- [data/uploads/](mdc:data/uploads) - 文件上传目录
+
+## API架构
+基于 FastAPI 的 RESTful API 设计：
+
+### 主要路由
+- `/api/auth/*` - 认证相关接口
+- `/api/users/*` - 用户管理接口
+- `/api/files/*` - 文件管理接口
+- `/api/tasks/*` - 任务管理接口
+- `/api/tasks/{task_id}/documents/*` - 标注相关接口
+
+### 数据格式
+所有数据以 JSON 格式存储在文件系统中，无需数据库：
+- 用户信息: `data/users/users.json`
+- 任务列表: `data/tasks/tasks.json`
+- 标注数据: `data/tasks/{task_id}/annotations/{document_id}.json`
+
+## 开发环境设置
+必须在正确的 Conda 环境中运行：
+
+```bash
+# 激活环境
+conda activate annotator
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 启动开发服务器
+cd backend
+uvicorn app.main:app --reload --port 8000
+```
+
+## 核心依赖
+- **FastAPI**: Web框架
+- **Pydantic**: 数据验证和序列化
+- **python-multipart**: 文件上传支持
+- **python-jose**: JWT认证
+- **passlib**: 密码哈希
+- **aiofiles**: 异步文件操作
+
+## 开发规范
+1. **路由组织**: 按功能模块组织API路由
+2. **数据验证**: 使用Pydantic模型进行输入验证
+3. **错误处理**: 统一的HTTP异常处理
+4. **文件操作**: 使用异步文件操作
+5. **认证**: JWT token 认证机制
+
+## 重要配置
+- API端口: 8000
+- CORS配置: 允许前端跨域访问
+- 文件上传: 支持多种文档格式
+- 认证: JWT token有效期配置
+

@@ -296,7 +296,7 @@ const AnnotationFormRenderer: React.FC<AnnotationFormRendererProps> = ({
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span>
-          {field.description || field.path}
+          {field.path}
           {field.required && <span style={{ color: 'red' }}> *</span>}
         </span>
         

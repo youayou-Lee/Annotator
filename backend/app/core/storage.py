@@ -645,6 +645,53 @@ class StorageManager:
         except Exception as e:
             return {"valid": False, "error": f"模板解析失败: {str(e)}"}
     
+    def validate_json_format(self, file_path: str) -> Dict[str, Any]:
+        """验证JSON文件格式是否正确"""
+        try:
+            full_path = self.data_dir / file_path
+            if not full_path.exists():
+                return {"valid": False, "error": "文件不存在"}
+            
+            with open(full_path, 'r', encoding='utf-8') as f:
+                if file_path.endswith('.jsonl'):
+                    # JSONL文件，逐行验证
+                    line_errors = []
+                    for line_num, line in enumerate(f, 1):
+                        line = line.strip()
+                        if not line:  # 跳过空行
+                            continue
+                        try:
+                            json.loads(line)
+                        except json.JSONDecodeError as e:
+                            line_errors.append({
+                                "line": line_num,
+                                "error": f"JSON解析错误: {e.msg}",
+                                "position": e.pos if hasattr(e, 'pos') else None
+                            })
+                    
+                    if line_errors:
+                        error_msg = f"JSONL文件格式错误，发现 {len(line_errors)} 行有问题：\n"
+                        for error in line_errors[:5]:  # 只显示前5个错误
+                            error_msg += f"第{error['line']}行: {error['error']}\n"
+                        if len(line_errors) > 5:
+                            error_msg += f"... 还有 {len(line_errors) - 5} 个错误"
+                        return {"valid": False, "error": error_msg}
+                else:
+                    # JSON文件
+                    f.seek(0)  # 重置文件指针
+                    try:
+                        json.load(f)
+                    except json.JSONDecodeError as e:
+                        return {
+                            "valid": False, 
+                            "error": f"JSON格式错误: {e.msg} (位置: 第{e.lineno}行，第{e.colno}列)"
+                        }
+            
+            return {"valid": True}
+            
+        except Exception as e:
+            return {"valid": False, "error": f"文件读取失败: {str(e)}"}
+    
     def get_file_size(self, file_path: str) -> int:
         """获取文件大小"""
         try:

@@ -76,6 +76,29 @@ async def create_task(
                 detail=f"文档文件不存在: {doc_path}"
             )
     
+    # 验证JSON文件格式
+    json_validation_errors = []
+    for doc_path in task_create.documents:
+        # 只验证JSON和JSONL文件
+        if doc_path.lower().endswith(('.json', '.jsonl')):
+            json_validation = storage.validate_json_format(doc_path)
+            if not json_validation.get("valid"):
+                json_validation_errors.append({
+                    "file_path": doc_path,
+                    "error": json_validation.get("error", "JSON格式错误")
+                })
+    
+    # 如果有JSON格式错误，直接返回错误
+    if json_validation_errors:
+        error_message = "JSON文件格式校验失败，请检查以下文件："
+        for error in json_validation_errors:
+            error_message += f"\n文件: {error['file_path']}\n错误: {error['error']}\n"
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_message
+        )
+    
     # 验证模板文件
     if task_create.template_path:
         template_files = storage.get_all_files(FileType.TEMPLATE)

@@ -1,0 +1,104 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# 开发工作流程指南
+
+## 环境准备
+在开始开发前，确保正确的环境配置：
+
+### 1. Conda 环境激活
+**重要**: 必须在 `annotator` conda 环境中运行Python代码！
+
+```bash
+# 激活正确的conda环境
+conda activate annotator
+
+# 验证环境
+conda info --envs
+```
+
+### 2. 依赖安装
+```bash
+# 后端依赖
+cd backend
+pip install -r requirements.txt
+
+# 前端依赖  
+cd frontend
+npm install
+```
+
+## 项目启动
+
+### 方式1: 同时启动前后端
+```bash
+# 在项目根目录执行
+npm run dev
+```
+
+### 方式2: 分别启动
+```bash
+# 启动后端 (终端1)
+cd backend
+conda activate annotator
+uvicorn app.main:app --reload --port 8000
+
+# 启动前端 (终端2)
+cd frontend
+npm run dev
+```
+
+## 访问地址
+- **前端**: http://localhost:5173
+- **后端API**: http://localhost:8000
+- **API文档**: http://localhost:8000/docs
+
+## 常用开发任务
+
+### 添加新的API接口
+1. 在 [backend/app/api/](mdc:backend/app/api) 中添加路由
+2. 在 [backend/app/schemas/](mdc:backend/app/schemas) 中定义Pydantic模型
+3. 在 [frontend/src/services/](mdc:frontend/src/services) 中添加API调用
+
+### 添加新页面
+1. 在 [frontend/src/pages/](mdc:frontend/src/pages) 中创建页面组件
+2. 在 [frontend/src/router/](mdc:frontend/src/router) 中配置路由
+3. 在 [frontend/src/types/](mdc:frontend/src/types) 中定义类型
+
+### 数据存储操作
+- 用户数据: 修改 [data/users/users.json](mdc:data/users/users.json)
+- 任务数据: 修改 [data/tasks/tasks.json](mdc:data/tasks/tasks.json)
+- 标注数据: 位于 [data/tasks/{task_id}/annotations/](mdc:data/tasks) 目录
+
+## 调试技巧
+
+### 后端调试
+- 查看终端日志输出
+- 使用 FastAPI 自动生成的 `/docs` 接口文档测试API
+- 检查 [data/](mdc:data) 目录中的JSON文件
+
+### 前端调试
+- 使用浏览器开发者工具
+- 检查网络请求和响应
+- 查看 Zustand 状态管理器状态
+
+## 重要文档参考
+- [package.json](mdc:package.json) - 项目配置和启动脚本
+- [requirements.txt](mdc:requirements.txt) - Python依赖
+- [系统设计文档.md](mdc:系统设计文档.md) - 系统架构详情
+
+## 故障排除
+
+### Conda环境问题
+如果遇到包未安装错误：
+1. 首先检查是否在正确的conda环境中
+2. 确认环境: `conda info --envs`
+3. 重新激活: `conda activate annotator`
+4. 再安装缺失的包: `pip install package_name`
+
+### 端口冲突
+- 后端默认8000端口，如被占用可修改启动命令
+- 前端默认5173端口，Vite会自动寻找可用端口
+

@@ -1,0 +1,55 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# 前端开发指南
+
+## 项目结构
+前端使用 React + TypeScript + Ant Design 构建，位于 [frontend/](mdc:frontend) 目录。
+
+### 核心目录
+- [frontend/src/pages/](mdc:frontend/src/pages) - 页面组件
+- [frontend/src/components/](mdc:frontend/src/components) - 通用组件
+- [frontend/src/services/](mdc:frontend/src/services) - API服务层
+- [frontend/src/stores/](mdc:frontend/src/stores) - Zustand状态管理
+- [frontend/src/types/](mdc:frontend/src/types) - TypeScript类型定义
+- [frontend/src/utils/](mdc:frontend/src/utils) - 工具函数
+
+### 主要页面
+- [Login/](mdc:frontend/src/pages/Login) - 用户登录页面
+- [FileLibrary/](mdc:frontend/src/pages/FileLibrary) - 文件库管理
+- [TaskList/](mdc:frontend/src/pages/TaskList) - 任务列表
+- [TaskDetail/](mdc:frontend/src/pages/TaskDetail) - 任务详情
+- [Annotation/](mdc:frontend/src/pages/Annotation) - 标注界面
+- [Review/](mdc:frontend/src/pages/Review) - 复审界面
+- [UserManagement/](mdc:frontend/src/pages/UserManagement) - 用户管理
+
+## 核心技术
+- **状态管理**: Zustand（轻量级状态管理）
+- **数据获取**: TanStack Query（React Query v5）
+- **HTTP客户端**: Axios
+- **UI组件**: Ant Design 5.x
+- **代码编辑器**: Monaco Editor（用于模板编辑）
+- **路由**: React Router v6
+
+## 开发规范
+1. **组件命名**: 使用 PascalCase
+2. **文件命名**: 组件文件使用 PascalCase，工具文件使用 camelCase
+3. **类型定义**: 统一放在 `types/` 目录下
+4. **API调用**: 通过 `services/` 层统一管理
+5. **样式**: 优先使用 Ant Design 组件，必要时使用 CSS Modules
+
+## 启动命令
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## 构建命令
+```bash
+cd frontend
+npm run build
+```
+
