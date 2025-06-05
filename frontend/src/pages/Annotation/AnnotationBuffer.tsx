@@ -481,53 +481,108 @@ const AnnotationBuffer: React.FC = () => {
         
         message.success('保存成功')
       } else {
-        throw new Error(result.message || '保存失败')
-      }
-    } catch (error: any) {
-      console.error('保存失败:', error)
-      
-      // 检查是否包含校验错误
-      let validationErrors: Record<string, any> | null = null
-      
-      if (error.response?.data?.validation_errors) {
-        validationErrors = error.response.data.validation_errors
-      } else if (error.response?.data?.detail && typeof error.response.data.detail === 'object') {
-        validationErrors = error.response.data.detail
-      }
-      
-      if (validationErrors) {
-        // 处理后端返回的校验错误
-        const updatedBuffer = { ...documentBuffer }
+        // API返回了失败状态，检查是否有详细的错误信息
+        console.log('[DEBUG] API返回失败:', result)
         
-        // 清除所有对象的现有校验错误
-        updatedBuffer.objects.forEach(obj => {
-          obj.validationErrors = {}
-          obj.isValid = true
-        })
+        let validationErrors: Record<string, any> | null = null
+        let errorMessage = result.message || '保存失败'
         
-        // 应用后端校验错误
-        Object.entries(validationErrors).forEach(([path, errors]) => {
-          const errorArray = Array.isArray(errors) ? errors : [errors]
+        // 检查是否有详细的错误信息
+        if (result.detail) {
+          console.log('[DEBUG] API返回的错误详情:', result.detail)
           
-          // 判断错误属于哪个对象（如果是多对象情况）
-          if (updatedBuffer.objectsCount === 1) {
-            updatedBuffer.objects[0].validationErrors[path] = errorArray
-            updatedBuffer.objects[0].isValid = false
-          } else {
-            // 多对象情况，需要根据路径判断属于哪个对象
-            // 这里需要根据实际的路径结构来判断
-            updatedBuffer.objects.forEach(obj => {
-              obj.validationErrors[path] = errorArray
-              obj.isValid = false
+          // 处理复杂的校验错误对象
+          if (result.detail.error_details) {
+            validationErrors = {}
+            const errorDetails = result.detail.error_details || []
+            
+            errorDetails.forEach((errorItem: any) => {
+              const field = errorItem.field || 'unknown'
+              const message = errorItem.message || errorItem.original_message || errorItem.type || '校验失败'
+              
+              if (!validationErrors![field]) {
+                validationErrors![field] = []
+              }
+              
+              // 为用户提供详细信息
+              let displayMessage = message
+              if (errorItem.input !== undefined && errorItem.input !== null) {
+                displayMessage += ` (当前输入: ${errorItem.input})`
+              }
+              if (errorItem.type && errorItem.type !== message) {
+                displayMessage += ` [类型: ${errorItem.type}]`
+              }
+              
+              validationErrors![field].push(displayMessage)
+              console.log(`[DEBUG] 字段错误 - ${field}: ${displayMessage}`)
             })
           }
-        })
+        }
         
-        setDocumentBuffer(updatedBuffer)
-        message.error('保存失败：数据校验错误，请检查标注内容')
-      } else {
-        message.error('保存失败: ' + error.message)
+        if (validationErrors && Object.keys(validationErrors).length > 0) {
+          // 处理后端返回的校验错误
+          const updatedBuffer = { ...documentBuffer }
+          
+          // 清除所有对象的现有校验错误
+          updatedBuffer.objects.forEach(obj => {
+            obj.validationErrors = {}
+            obj.isValid = true
+          })
+          
+          // 应用后端校验错误
+          Object.entries(validationErrors).forEach(([path, errors]) => {
+            const errorArray = Array.isArray(errors) ? errors : [errors]
+            
+            // 判断错误属于哪个对象（如果是多对象情况）
+            if (updatedBuffer.objectsCount === 1) {
+              updatedBuffer.objects[0].validationErrors[path] = errorArray
+              updatedBuffer.objects[0].isValid = false
+            } else {
+              // 多对象情况，需要根据路径判断属于哪个对象
+              updatedBuffer.objects.forEach(obj => {
+                obj.validationErrors[path] = errorArray
+                obj.isValid = false
+              })
+            }
+          })
+          
+          setDocumentBuffer(updatedBuffer)
+          
+          // 显示详细的校验错误信息
+          const errorFieldsCount = Object.keys(validationErrors).length
+          const totalErrorsCount = Object.values(validationErrors).flat().length
+          
+          message.error({
+            content: `${errorMessage}（${errorFieldsCount} 个字段，共 ${totalErrorsCount} 个错误）`,
+            duration: 5
+          })
+          
+          // 自动滚动到第一个有错误的字段
+          setTimeout(() => {
+            const firstErrorField = Object.keys(validationErrors!)[0]
+            if (firstErrorField) {
+              const errorElement = document.querySelector(`[data-field-path="${firstErrorField}"]`)
+              if (errorElement) {
+                errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              }
+            }
+          }, 100)
+          
+        } else {
+          // 非校验错误
+          message.error({
+            content: errorMessage,
+            duration: 4
+          })
+        }
       }
+    } catch (error: any) {
+      // 这里处理网络错误或其他意外错误
+      console.error('保存过程中发生异常:', error)
+      message.error({
+        content: '保存过程中发生异常: ' + (error.message || String(error)),
+        duration: 4
+      })
     }
   }
 

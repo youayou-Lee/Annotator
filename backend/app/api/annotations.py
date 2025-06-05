@@ -462,6 +462,85 @@ async def save_annotation(
             detail="无权修改此任务"
         )
     
+    # 如果任务有模板且标注数据不为空，进行 Pydantic 校验
+    annotation_data = annotation_update.annotation_data
+    if (task.template and task.template.file_path and 
+        annotation_data is not None and annotation_data):
+        
+        try:
+            print(f"[DEBUG] 开始校验标注数据，任务: {task_id}, 文档: {document_id}")
+            print(f"[DEBUG] 模板路径: {task.template.file_path}")
+            print(f"[DEBUG] 标注数据: {annotation_data}")
+            
+            full_template_path = storage.data_dir / task.template.file_path
+            print(f"[DEBUG] 完整模板路径: {full_template_path}")
+            
+            validation_result = annotation_validator.validate_annotation_data(
+                str(full_template_path), 
+                annotation_data
+            )
+            
+            print(f"[DEBUG] 校验结果: {validation_result}")
+            
+            if not validation_result["valid"]:
+                error_response = {
+                    "message": str(validation_result.get("error", "标注数据验证失败")),
+                    "error_details": validation_result.get("error_details", []),
+                    "validation_errors": validation_result.get("error_details", []),  # 兼容性
+                }
+                
+                # 如果有原始错误，转换为可序列化的格式
+                if "raw_errors" in validation_result:
+                    try:
+                        # 尝试序列化原始错误，如果失败则转换为字符串
+                        import json
+                        raw_errors = validation_result["raw_errors"]
+                        # 确保原始错误是可序列化的
+                        serializable_raw_errors = []
+                        for err in raw_errors:
+                            serializable_err = {}
+                            for key, value in err.items():
+                                try:
+                                    json.dumps(value)  # 测试是否可序列化
+                                    serializable_err[key] = value
+                                except (TypeError, ValueError):
+                                    serializable_err[key] = str(value)  # 转换为字符串
+                            serializable_raw_errors.append(serializable_err)
+                        
+                        error_response["raw_errors"] = serializable_raw_errors
+                    except Exception as e:
+                        print(f"[WARNING] 无法序列化原始错误: {e}")
+                        error_response["raw_errors_note"] = "原始错误信息无法序列化"
+                
+                print(f"[DEBUG] 返回校验错误: {error_response}")
+                
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=error_response
+                )
+            
+            # 使用验证后的数据
+            annotation_data = validation_result.get("validated_data", annotation_data)
+            print(f"[DEBUG] 校验通过，使用验证后的数据")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            error_msg = f"数据验证过程中发生错误: {str(e)}"
+            print(f"[ERROR] {error_msg}")
+            import traceback
+            print(f"[ERROR] 异常堆栈: {traceback.format_exc()}")
+            
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "message": error_msg,
+                    "error_details": [{"field": "system", "message": error_msg, "type": "system_error"}]
+                }
+            )
+    else:
+        print(f"[DEBUG] 跳过校验 - 模板: {task.template is not None}, 路径: {task.template.file_path if task.template else None}, 数据: {annotation_data is not None}")
+    
     # 获取或创建标注数据
     annotation = storage.get_annotation(task_id, document_id)
     if not annotation:
@@ -475,8 +554,8 @@ async def save_annotation(
         )
     
     # 更新标注数据
-    if annotation_update.annotation_data is not None:
-        annotation.annotation_data = annotation_update.annotation_data
+    if annotation_data is not None:
+        annotation.annotation_data = annotation_data
         # 如果有数据且状态还是pending，自动改为in_progress
         if annotation.status == AnnotationStatus.PENDING:
             annotation.status = AnnotationStatus.IN_PROGRESS

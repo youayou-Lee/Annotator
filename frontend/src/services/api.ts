@@ -452,9 +452,36 @@ export const annotationAPI = {
         data: response.data
       }
     } catch (error: any) {
+      console.log('[DEBUG] saveAnnotation API错误:', error)
+      console.log('[DEBUG] 错误响应数据:', error.response?.data)
+      
+      // 处理复杂的错误结构
+      let errorMessage = '保存标注数据失败'
+      let errorDetail = null
+      
+      if (error.response?.data) {
+        const responseData = error.response.data
+        
+        // 如果有 detail 字段且是对象，提取其中的信息
+        if (responseData.detail) {
+          if (typeof responseData.detail === 'string') {
+            errorMessage = responseData.detail
+          } else if (typeof responseData.detail === 'object') {
+            // 复杂的校验错误对象
+            errorMessage = responseData.detail.message || '数据验证失败'
+            errorDetail = responseData.detail
+          }
+        } else if (responseData.message) {
+          errorMessage = responseData.message
+        } else if (typeof responseData === 'string') {
+          errorMessage = responseData
+        }
+      }
+      
       return {
         success: false,
-        message: error.response?.data?.detail || '保存标注数据失败'
+        message: errorMessage,
+        detail: errorDetail  // 保留完整的错误详情
       }
     }
   },

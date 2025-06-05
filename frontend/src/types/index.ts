@@ -140,6 +140,7 @@ export interface ApiResponse<T = any> {
   data?: T
   message?: string
   error?: string
+  detail?: any  // 用于保存复杂的错误详情（如校验错误）
 }
 
 export interface PaginatedResponse<T> {

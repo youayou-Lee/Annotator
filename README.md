@@ -251,3 +251,87 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 ---
 
 **重要**：请确保在执行任何Python命令前激活conda环境：`conda activate annotator`
+
+## 数据验证策略
+
+### 前端验证（轻量级）
+- 只进行基本的必填字段检查
+- 简单的类型转换和格式化
+- 实时用户体验反馈
+
+### 后端验证（严格校验）
+- 基于 Pydantic 模型的完整数据验证
+- 字段类型、约束条件、业务规则校验
+- 自定义验证器和模型级验证
+- 详细的错误信息返回
+
+### 错误处理流程
+1. 用户填写表单时，前端进行基础验证
+2. 点击保存时，数据发送到后端
+3. 后端使用 Pydantic 模板进行严格校验
+4. 如果校验失败，返回详细错误信息
+5. 前端接收错误信息并在对应字段显示
+6. 用户修正错误后重新保存
+
+## 技术栈
+
+- **前端**: React 18 + TypeScript + Antd + Monaco Editor
+- **后端**: FastAPI + Pydantic + Python 3.8+
+- **数据存储**: 文件系统 (JSON)
+- **权限管理**: JWT + 基于角色的访问控制
+
+## 标注模板
+
+系统支持基于 Pydantic 的动态标注模板：
+
+```python
+from pydantic import BaseModel, Field, field_validator
+from typing import List
+
+class CrimeAnalysis(BaseModel):
+    """犯罪分析模型"""
+    案件描述: str = Field("", description="案件描述")
+    构成原因: str = Field("", description="构成犯罪的原因", 
+                       json_schema_extra={"is_annotation": True})
+    嫌疑人: str
+    罪名: str
+    基准刑_年: str = Field(description="基准刑期-年", 
+                         json_schema_extra={"is_annotation": True})
+    基准刑_月: str = Field(description="基准刑期-月", 
+                         json_schema_extra={"is_annotation": True})
+    
+    @field_validator('基准刑_月')
+    @classmethod
+    def validate_months(cls, v: str) -> str:
+        try:
+            v_int = int(v)
+        except ValueError:
+            raise ValueError("必须是数字")
+        if v_int >= 12:
+            raise ValueError("月份应该小于12")
+        return v
+```
+
+## 开发说明
+
+### 添加新的验证规则
+1. 在模板文件中添加 `@field_validator` 或 `@model_validator`
+2. 重新上传模板到系统
+3. 创建使用该模板的任务
+
+### 调试验证功能
+运行测试脚本验证 Pydantic 校验：
+```bash
+python test_validation.py
+```
+
+## 注意事项
+
+1. 确保 conda 环境正确激活
+2. 后端数据目录有适当的读写权限
+3. 生产环境请修改默认密码和密钥
+4. Monaco Editor 已优化错误处理，抑制 Worker 错误
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request。
