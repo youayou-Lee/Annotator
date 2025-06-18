@@ -156,7 +156,7 @@ export const authAPI = {
 export const userAPI = {
   getUsers: async (): Promise<ApiResponse<User[]>> => {
     try {
-      const response = await api.get('/users')
+      const response = await api.get('/users/')
       return {
         success: true,
         data: response.data
@@ -189,7 +189,7 @@ export const userAPI = {
 export const fileAPI = {
   getFiles: async (type?: 'documents' | 'templates' | 'annotation_results'): Promise<ApiResponse<FileItem[]>> => {
     try {
-      const response = await api.get('/files', { params: { file_type: type } })
+      const response = await api.get('/files/', { params: { file_type: type } })
       // 后端返回格式: { files: FileItem[], total: number, file_type: string }
       return {
         success: true,
@@ -267,7 +267,7 @@ export const taskAPI = {
     page_size?: number
   }): Promise<ApiResponse<Task[]>> => {
     try {
-      const response = await api.get('/tasks', { params })
+      const response = await api.get('/tasks/', { params })
       // 后端返回的是TaskListResponse格式: { tasks: Task[], total: number, page: number, page_size: number, total_pages: number }
       return {
         success: true,
@@ -283,7 +283,7 @@ export const taskAPI = {
     
   createTask: async (data: CreateTaskRequest): Promise<ApiResponse<Task>> => {
     try {
-      const response = await api.post('/tasks', data)
+      const response = await api.post('/tasks/', data)
       return {
         success: true,
         data: response.data
